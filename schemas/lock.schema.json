@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jmlero/agent-suitup/main/schemas/lock.schema.json",
+  "title": "agent-suitup lockfile",
+  "type": "object",
+  "required": ["lockfileVersion", "components"],
+  "properties": {
+    "lockfileVersion": { "const": 1 },
+    "components": { "type": "object", "additionalProperties": { "type": "object" } },
+    "bridges": { "type": "object" }
+  },
+  "additionalProperties": false
+}

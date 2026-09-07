@@ -1,0 +1,492 @@
+{
+  "$schema": "../schemas/catalog.schema.json",
+  "catalogVersion": 2,
+  "components": [
+    {
+      "id": "block/tdd",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Test-driven development",
+      "category": "Development methodology",
+      "description": "A compact Red-Green-Refactor agreement managed in AGENTS.md.",
+      "selection": {
+        "when": "You want test-first feature and bug-fix work and have a practical test environment.",
+        "consider": "Skip for exploratory work if test order is not a standing project policy.",
+        "example": "A parser bug gets a failing regression test before the fix."
+      },
+      "outcome": "Features and bug fixes begin with a behavioral test and finish with relevant checks passing.",
+      "alwaysOnJustification": "The agreement changes implementation order throughout feature and bug-fix work.",
+      "scopes": ["project"],
+      "content": { "kind": "bundled", "path": "blocks/tdd.md" },
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/ponytail",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Minimal implementation",
+      "category": "Development methodology",
+      "description": "Keep the smallest safe implementation rules always available in AGENTS.md.",
+      "selection": {
+        "when": "Changes keep acquiring unused abstractions, wrappers, or dependencies.",
+        "consider": "State planned extension points as requirements; a small diff alone is not proof of correctness.",
+        "example": "Reuse the existing HTTP client instead of adding a provider framework."
+      },
+      "outcome": "Changes meet current requirements without speculative code, dependencies, or abstraction.",
+      "alwaysOnJustification": "The rule applies whenever an agent chooses an implementation approach.",
+      "scopes": ["project"],
+      "content": {
+        "kind": "bundled",
+        "path": "blocks/ponytail.md",
+        "upstream": "DietrichGebert/ponytail",
+        "revision": "2ed6c52c9d7e5e56942508591085fd45dea277d3"
+      },
+      "license": "MIT",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/completion-evidence",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Completion evidence",
+      "category": "Verification",
+      "description": "Require concrete checks and transparent reporting before claiming completion.",
+      "selection": {
+        "when": "Handoffs leave you unsure which checks actually ran.",
+        "consider": "Adds reporting to every handoff. Choose Verify work for occasional verification instead.",
+        "example": "A UI handoff names the tests and browser checks run, plus anything skipped."
+      },
+      "outcome": "Completion claims identify the checks run, failures encountered, and verification skipped.",
+      "alwaysOnJustification": "The rule applies to the completion of every repository task.",
+      "scopes": ["project"],
+      "content": {
+        "kind": "bundled",
+        "path": "blocks/completion-evidence.md",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/transparent-shortcuts",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Transparent shortcuts",
+      "category": "Delivery safety",
+      "description": "Make deliberately deferred necessary work visible without inventing speculative debt.",
+      "selection": {
+        "when": "Necessary work is deliberately postponed during delivery.",
+        "consider": "Do not turn speculative future features into debt or duplicate an existing tracking process.",
+        "example": "Record the reason and risk when a required retry path is deferred."
+      },
+      "outcome": "Material deferred work is visible with a concrete reason and risk.",
+      "alwaysOnJustification": "The rule must be available when task scope and implementation tradeoffs are decided.",
+      "scopes": ["project"],
+      "content": {
+        "kind": "bundled",
+        "path": "blocks/transparent-shortcuts.md",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/secure-defaults",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Secure defaults",
+      "category": "Security",
+      "description": "Apply concise preventive safeguards at new external boundaries.",
+      "selection": {
+        "when": "You add APIs, file imports, or sensitive operations across trust boundaries.",
+        "consider": "Does not replace a threat model or define your actual roles, limits, and authentication choices.",
+        "example": "An upload endpoint checks caller permissions, file type, and size limits."
+      },
+      "outcome": "New trust boundaries validate and constrain input, protect mutations, and use least privilege.",
+      "alwaysOnJustification": "In repositories with external boundaries, the safeguards affect design before code is written.",
+      "scopes": ["project"],
+      "content": {
+        "kind": "bundled",
+        "path": "blocks/secure-defaults.md",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/ci-production-parity",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "CI and production parity",
+      "category": "Verification",
+      "description": "Keep CI runtimes and build paths aligned with production behavior.",
+      "selection": {
+        "when": "CI and production runtime or build settings live in separate places.",
+        "consider": "Match relevant behavior; production secrets and live services do not belong in CI.",
+        "example": "A runtime upgrade updates both the production image and CI test runtime."
+      },
+      "outcome": "Runtime and build changes update CI and production paths together and receive equivalent verification.",
+      "alwaysOnJustification": "In repositories with CI and production builds, parity affects dependency, runtime, and deployment changes.",
+      "scopes": ["project"],
+      "content": {
+        "kind": "bundled",
+        "path": "blocks/ci-production-parity.md",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" },
+      "suggest": { "when": { "all": ["hasCI"] }, "reason": "continuous integration detected" }
+    },
+    {
+      "id": "block/no-unfinished-ui",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "No unfinished UI",
+      "category": "Frontend quality",
+      "description": "Do not expose incomplete product paths without an explicit product reason.",
+      "selection": {
+        "when": "Released interfaces should expose only usable product paths.",
+        "consider": "Exploratory prototypes and explicitly required disabled states may need a different policy.",
+        "example": "Omit an export button until export works, unless the product requires a disabled state."
+      },
+      "outcome": "Users see coherent product paths rather than nonfunctional controls or placeholders.",
+      "alwaysOnJustification": "When adopted as product policy, the rule applies across all frontend implementation work.",
+      "scopes": ["project"],
+      "content": {
+        "kind": "bundled",
+        "path": "blocks/no-unfinished-ui.md",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/focused-changes",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Focused changes",
+      "category": "Change scope",
+      "description": "Keep edits within the requested outcome, preserve unrelated work, and clean up code made unused by the change.",
+      "selection": {
+        "when": "You want a standing policy against incidental cleanup, formatting, and unrelated edits during implementation.",
+        "consider": "Skip if equivalent project guidance already applies. Necessary supporting refactors and explicitly requested cleanup remain allowed.",
+        "example": "A parser fix removes its newly unused import while leaving unrelated comments, formatting, and user edits intact."
+      },
+      "outcome": "Changes include necessary supporting work without incidental cleanup or damage to unrelated user work.",
+      "alwaysOnJustification": "The policy governs the scope of edits throughout implementation, before any review workflow is invoked.",
+      "scopes": ["project"],
+      "content": { "kind": "bundled", "path": "blocks/focused-changes.md" },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "skill/audit-code",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Production readiness audit",
+      "category": "Code quality",
+      "description": "Audit security, errors, validation, persistence, infrastructure, tests, and dependencies before release.",
+      "selection": {
+        "when": "You want a broad production readiness review before a release.",
+        "consider": "Produces findings, not automatic fixes. Use Pull request review for one change set.",
+        "example": "Ask: Use audit-code to review this repository before release."
+      },
+      "scopes": ["project", "user"],
+      "content": { "kind": "bundled", "path": "skills/audit-code/SKILL.md" },
+      "context": { "loading": "on-demand" }
+    },
+    {
+      "id": "skill/audit-docs",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Documentation audit",
+      "category": "Code quality",
+      "description": "Audit documentation for accuracy, staleness, duplication, broken references, and unnecessary context cost.",
+      "selection": {
+        "when": "Setup instructions, links, or repository docs may have drifted from the code.",
+        "consider": "Reports evidence and recommended fixes; editing needs a separate request.",
+        "example": "Ask: Use audit-docs to check our README and contributor documentation."
+      },
+      "scopes": ["project", "user"],
+      "content": { "kind": "bundled", "path": "skills/audit-docs/SKILL.md" },
+      "context": { "loading": "on-demand" },
+      "suggest": { "when": { "all": ["hasDocs"] }, "reason": "documentation detected" }
+    },
+    {
+      "id": "skill/review-pr",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Pull request review",
+      "category": "Code quality",
+      "description": "Review a pull request for correctness, security, tests, compatibility, and project conventions.",
+      "selection": {
+        "when": "You have a pull request or diff ready for a focused review.",
+        "consider": "Needs the actual change set and surrounding code; does not replace a whole-repository audit.",
+        "example": "Ask: Use review-pr to review this diff for regressions and missing tests."
+      },
+      "scopes": ["project", "user"],
+      "content": { "kind": "bundled", "path": "skills/review-pr/SKILL.md" },
+      "context": { "loading": "on-demand" }
+    },
+    {
+      "id": "skill/verify-frontend",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Frontend verification",
+      "category": "Frontend quality",
+      "description": "Inspect changed frontend behavior at representative viewports and interaction states.",
+      "selection": {
+        "when": "You changed a page, interaction, layout, or responsive behavior.",
+        "consider": "Needs a runnable interface and browser access for visual evidence; missing checks must be reported.",
+        "example": "Ask: Use verify-frontend to check this form on mobile and desktop."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "bundled",
+        "path": "skills/verify-frontend/SKILL.md",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "on-demand" },
+      "suggest": {
+        "when": { "any": ["hasReact", "hasNextJs", "hasVue", "hasSvelte"] },
+        "reason": "frontend framework detected"
+      }
+    },
+    {
+      "id": "skill/terraform-skill",
+      "version": "2.0.0",
+      "kind": "skill",
+      "name": "Terraform skill",
+      "category": "Community",
+      "description": "Version-aware Terraform and OpenTofu guidance with complete upstream references.",
+      "selection": {
+        "when": "You maintain Terraform or OpenTofu configuration and need version-aware guidance.",
+        "consider": "Downloads upstream content and references when selected. Guidance must match installed tool versions.",
+        "example": "Ask: Use terraform-skill to review this module against our pinned Terraform version."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "remote",
+        "url": "https://raw.githubusercontent.com/antonbabenko/terraform-skill/master/skills/terraform-skill/SKILL.md",
+        "upstream": "antonbabenko/terraform-skill",
+        "root": "skills/terraform-skill",
+        "overlay": "overlays/terraform-skill.md",
+        "licensePath": "LICENSE",
+        "mutable": true
+      },
+      "license": "Apache-2.0",
+      "context": { "loading": "on-demand", "estimatedTokens": 5200 },
+      "suggest": { "when": { "all": ["hasTerraform"] }, "reason": "Terraform detected" }
+    },
+    {
+      "id": "skill/fastapi",
+      "version": "2.0.0",
+      "kind": "skill",
+      "name": "FastAPI",
+      "category": "Framework skill",
+      "description": "Official, version-aware FastAPI guidance with complete upstream references.",
+      "selection": {
+        "when": "You build or maintain a FastAPI application.",
+        "consider": "Downloads upstream content and references when selected. Check advice against the project version.",
+        "example": "Ask: Use fastapi to implement a validated endpoint using our installed version."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "remote",
+        "url": "https://raw.githubusercontent.com/fastapi/fastapi/master/fastapi/.agents/skills/fastapi/SKILL.md",
+        "upstream": "fastapi/fastapi",
+        "root": "fastapi/.agents/skills/fastapi",
+        "overlay": "overlays/fastapi.md",
+        "licensePath": "LICENSE",
+        "mutable": true
+      },
+      "license": "MIT",
+      "context": { "loading": "on-demand", "estimatedTokens": 2700 },
+      "suggest": { "when": { "all": ["hasFastAPI"] }, "reason": "FastAPI detected" }
+    },
+    {
+      "id": "skill/debug-issue",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Issue debugging",
+      "category": "Diagnosis",
+      "description": "Diagnose a concrete failure with reproduction, competing hypotheses, and evidence; verify a focused fix when requested.",
+      "selection": {
+        "when": "A bug, regression, or unexplained failure needs a supported diagnosis.",
+        "consider": "Keep obvious fixes brief. Diagnosis-only requests preserve the implementation; unavailable evidence must be reported.",
+        "example": "Ask: Use debug-issue to investigate and fix this intermittent test failure."
+      },
+      "scopes": ["project", "user"],
+      "content": { "kind": "bundled", "path": "skills/debug-issue/SKILL.md" },
+      "license": "Apache-2.0",
+      "context": { "loading": "on-demand" }
+    },
+    {
+      "id": "skill/database-migration",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Database migration",
+      "category": "Data lifecycle",
+      "description": "Prepare and validate schema or data migrations, including deployment order, existing data, locks, retries, and recovery.",
+      "selection": {
+        "when": "You are planning, implementing, or reviewing a schema change or data backfill.",
+        "consider": "Requires database and deployment context. Disposable databases can use simpler workflows; preparing a migration does not authorize production execution.",
+        "example": "Ask: Use database-migration to plan a column rename while old and new application versions coexist."
+      },
+      "scopes": ["project", "user"],
+      "content": { "kind": "bundled", "path": "skills/database-migration/SKILL.md" },
+      "license": "Apache-2.0",
+      "context": { "loading": "on-demand" }
+    },
+    {
+      "id": "command/verify-work",
+      "version": "1.1.0",
+      "kind": "command",
+      "name": "Verify work",
+      "category": "Workflow command",
+      "description": "Run the repository's real checks and report concrete evidence without changing the implementation.",
+      "selection": {
+        "when": "You want a deliberate verification pass after implementation.",
+        "consider": "Runs checks and reports evidence without changing the implementation.",
+        "example": "Invoke verify-work after a change to see what passed and what remains unverified."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "bundled",
+        "path": "commands/verify-work/SKILL.md",
+        "root": "commands/verify-work"
+      },
+      "context": { "loading": "explicit" }
+    },
+    {
+      "id": "command/commit-work",
+      "version": "1.0.0",
+      "kind": "command",
+      "name": "Commit work",
+      "category": "Workflow command",
+      "description": "Review, validate, and create one focused Git commit while preserving unrelated work.",
+      "selection": {
+        "when": "A focused change is ready to validate and commit.",
+        "consider": "Creates a Git commit when invoked; preserves unrelated work and does not push automatically.",
+        "example": "Invoke commit-work to review, validate, and commit the current focused change."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "bundled",
+        "path": "commands/commit-work/SKILL.md",
+        "root": "commands/commit-work"
+      },
+      "context": { "loading": "explicit" }
+    },
+    {
+      "id": "plugin/frontend-design",
+      "version": "1.0.0",
+      "kind": "plugin",
+      "name": "Frontend design",
+      "category": "Anthropic",
+      "description": "Official Claude plugin for production-grade frontend design.",
+      "selection": {
+        "when": "You use Claude and want its frontend design plugin available.",
+        "consider": "Requires Claude. Installation enables the plugin; it does not build or verify your interface.",
+        "example": "Use the design plugin in Claude while building a new product page."
+      },
+      "adapters": ["claude"],
+      "scopes": ["project", "user"],
+      "adapter": { "claude": { "pluginId": "frontend-design", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
+      "lastVerified": "2026-08-15",
+      "suggest": {
+        "when": { "any": ["hasReact", "hasNextJs", "hasVue", "hasSvelte"] },
+        "reason": "frontend framework detected"
+      }
+    },
+    {
+      "id": "plugin/typescript-lsp",
+      "version": "1.0.0",
+      "kind": "plugin",
+      "name": "TypeScript LSP",
+      "category": "Anthropic",
+      "description": "Official Claude TypeScript language-server integration.",
+      "selection": {
+        "when": "You use Claude on JavaScript or TypeScript projects with a language server.",
+        "consider": "Requires typescript-language-server on PATH; this installer does not install that executable.",
+        "example": "Enable language-server support for a TypeScript project in Claude."
+      },
+      "adapters": ["claude"],
+      "scopes": ["project", "user"],
+      "recommendedScope": "user",
+      "requires": { "commands": ["typescript-language-server"] },
+      "adapter": { "claude": { "pluginId": "typescript-lsp", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
+      "lastVerified": "2026-08-15",
+      "suggest": {
+        "when": { "all": ["hasTypeScript", "hasTypeScriptLanguageServer"] },
+        "reason": "TypeScript and its language server detected"
+      }
+    },
+    {
+      "id": "plugin/pyright-lsp",
+      "version": "1.0.0",
+      "kind": "plugin",
+      "name": "Pyright LSP",
+      "category": "Anthropic",
+      "description": "Official Claude Python type-checking integration.",
+      "selection": {
+        "when": "You use Claude on Python projects and already have Pyright installed.",
+        "consider": "Requires pyright-langserver on PATH; this installer does not install that executable.",
+        "example": "Enable Python type-checking integration for your Claude workflow."
+      },
+      "adapters": ["claude"],
+      "scopes": ["project", "user"],
+      "recommendedScope": "user",
+      "requires": { "commands": ["pyright-langserver"] },
+      "adapter": { "claude": { "pluginId": "pyright-lsp", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
+      "lastVerified": "2026-08-15",
+      "suggest": {
+        "when": { "all": ["hasPython", "hasPyrightLanguageServer"] },
+        "reason": "Python and Pyright detected"
+      }
+    },
+    {
+      "id": "plugin/github",
+      "version": "1.0.0",
+      "kind": "plugin",
+      "name": "GitHub",
+      "category": "Anthropic",
+      "description": "Official Claude integration for GitHub issues, pull requests, and actions; authentication is configured separately.",
+      "selection": {
+        "when": "You use Claude to work with GitHub issues, pull requests, and actions.",
+        "consider": "GitHub authentication is configured separately; enabling settings does not authenticate you.",
+        "example": "Connect GitHub in Claude, then ask it to inspect a pull request."
+      },
+      "adapters": ["claude"],
+      "scopes": ["project", "user"],
+      "adapter": { "claude": { "pluginId": "github", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
+      "lastVerified": "2026-08-15",
+      "suggest": { "when": { "all": ["isGitHubRepo"] }, "reason": "GitHub remote detected" }
+    },
+    {
+      "id": "plugin/codex",
+      "version": "1.0.6",
+      "kind": "plugin",
+      "name": "Codex for Claude",
+      "category": "OpenAI",
+      "description": "Claude plugin that exposes an existing Codex CLI for delegation and code review.",
+      "selection": {
+        "when": "You use Claude and already have the Codex CLI for review or delegated work.",
+        "consider": "Requires codex on PATH and separate runtime setup; it does not install the Codex CLI.",
+        "example": "Use the plugin from Claude to request a second review through your Codex CLI."
+      },
+      "adapters": ["claude"],
+      "scopes": ["project", "user"],
+      "requires": { "commands": ["codex"] },
+      "adapter": { "claude": { "pluginId": "codex", "marketplace": { "name": "openai-codex", "repo": "openai/codex-plugin-cc" } } },
+      "lastVerified": "2026-08-15"
+    }
+  ]
+}

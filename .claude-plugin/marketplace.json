@@ -1,0 +1,41 @@
+{
+  "name": "jmlero",
+  "owner": { "name": "jmlero" },
+  "metadata": {
+    "description": "Claude adapter for portable agent-suitup skills",
+    "version": "0.1.0"
+  },
+  "description": "Portable agent-suitup skills for Claude Code",
+  "plugins": [
+    {
+      "name": "audit-code",
+      "source": "./",
+      "description": "Production readiness audit",
+      "version": "1.0.0",
+      "license": "Apache-2.0",
+      "skills": ["./adapters/claude/plugins/audit-code/skills/audit-code"],
+      "strict": false,
+      "keywords": ["audit", "security", "production"]
+    },
+    {
+      "name": "audit-docs",
+      "source": "./",
+      "description": "Documentation accuracy and context-cost audit",
+      "version": "1.0.0",
+      "license": "Apache-2.0",
+      "skills": ["./adapters/claude/plugins/audit-docs/skills/audit-docs"],
+      "strict": false,
+      "keywords": ["audit", "documentation", "markdown"]
+    },
+    {
+      "name": "review-pr",
+      "source": "./",
+      "description": "Evidence-backed pull request review",
+      "version": "1.0.0",
+      "license": "Apache-2.0",
+      "skills": ["./adapters/claude/plugins/review-pr/skills/review-pr"],
+      "strict": false,
+      "keywords": ["review", "pull-request", "security"]
+    }
+  ]
+}

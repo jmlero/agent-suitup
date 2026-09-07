@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/jmlero/agent-suitup/main/schemas/manifest.schema.json",
+  "title": "agent-suitup project manifest",
+  "type": "object",
+  "required": ["manifestVersion", "adapters", "components"],
+  "properties": {
+    "manifestVersion": { "const": 2 },
+    "adapters": { "type": "array", "items": { "enum": ["claude", "grok"] }, "uniqueItems": true },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "scope"],
+        "properties": {
+          "id": { "type": "string" },
+          "scope": { "enum": ["project", "user"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,33 @@
+{
+  "name": "agent-suitup",
+  "version": "0.1.0",
+  "description": "CLI for curated agent working agreements and task workflows.",
+  "type": "module",
+  "bin": {
+    "agent-suitup": "./bin/agent-suitup.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check bin/agent-suitup.mjs && node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jmlero/agent-suitup"
+  },
+  "license": "Apache-2.0",
+  "files": [
+    ".claude-plugin/",
+    "adapters/",
+    "bin/",
+    "catalog/",
+    "docs/",
+    "schemas/",
+    "src/",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ]
+}
