@@ -1,6 +1,6 @@
 import readline from "node:readline";
-import { Picker, pickerFrame } from "./dashboard.mjs";
-export { Picker, pickerFrame } from "./dashboard.mjs";
+import { AgentPicker, Picker, agentFrame, pickerFrame } from "./dashboard.mjs";
+export { AgentPicker, Picker, agentFrame, pickerFrame } from "./dashboard.mjs";
 
 const terminationSignals = process.platform === "win32" ? [] : ["SIGTERM", "SIGHUP"];
 
@@ -70,6 +70,10 @@ export class Prompts {
     return pickComponents(components, { ...options, input: this.input, output: this.output });
   }
 
+  pickAgents(options) {
+    return pickAgents({ ...options, input: this.input, output: this.output });
+  }
+
   close() {
     this.reader?.close();
     this.input.pause();
@@ -100,6 +104,16 @@ export function pickComponents(components, {
   input = process.stdin, output = process.stdout, ...options
 } = {}) {
   const picker = new Picker(components, options);
+  return runScreen(picker, (size) => pickerFrame(picker, { ...options, ...size }), () => picker.selection.map(({ id }) => id), { input, output });
+}
+
+export function pickAgents({ input = process.stdin, output = process.stdout, ...options } = {}) {
+  const model = new AgentPicker(options);
+  return runScreen(model, (size) => agentFrame(model, size), () => model.selection, { input, output });
+}
+
+// Runs one full-screen keyboard view until its model submits or cancels.
+function runScreen(model, frame, result, { input, output }) {
   const wasRaw = Boolean(input.isRaw);
   // A stream nobody has read yet is not flowing either; leave it paused so
   // input typed during the picker waits for the next prompt.
@@ -108,8 +122,8 @@ export function pickComponents(components, {
     let finished = false;
     const render = () => {
       try {
-        const frame = pickerFrame(picker, { ...options, columns: output.columns, rows: output.rows });
-        output.write(`\x1b[H${frame.map((line) => `${line}\x1b[K`).join("\n")}\x1b[J`);
+        const lines = frame({ columns: output.columns, rows: output.rows });
+        output.write(`\x1b[H${lines.map((line) => `${line}\x1b[K`).join("\n")}\x1b[J`);
       } catch (error) {
         finish(error);
       }
@@ -129,10 +143,10 @@ export function pickComponents(components, {
       finished = true;
       try { cleanup(); } catch (cleanupError) { error ??= cleanupError; }
       if (error) reject(error);
-      else resolve(picker.selection.map(({ id }) => id));
+      else resolve(result());
     };
     const onKey = (text, key) => {
-      const action = picker.handle(text, key);
+      const action = model.handle(text, key);
       if (action) finish(action === "cancel" ? new PromptCancelled() : null);
       else render();
     };

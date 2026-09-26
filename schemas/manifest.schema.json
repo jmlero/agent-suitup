@@ -6,7 +6,7 @@
   "required": ["manifestVersion", "adapters", "components"],
   "properties": {
     "manifestVersion": { "const": 2 },
-    "adapters": { "type": "array", "items": { "enum": ["claude", "grok"] }, "uniqueItems": true },
+    "adapters": { "type": "array", "items": { "enum": ["claude", "codex", "grok"] }, "uniqueItems": true },
     "components": {
       "type": "array",
       "items": {

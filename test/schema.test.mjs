@@ -99,7 +99,7 @@ test("the manifest schema accepts exactly the manifests the CLI reads", () => {
   for (const [name, invalid] of [
     ["pre-rename version", { manifestVersion: 1, targets: ["codex"], components: [] }],
     ["future version", { ...manifest, manifestVersion: 3 }],
-    ["unknown adapter", { ...manifest, adapters: ["codex"] }],
+    ["unknown agent", { ...manifest, adapters: ["cursor"] }],
     ["unknown scope", { ...manifest, components: [{ id: "block/tdd", scope: "global" }] }],
     ["missing adapters", { manifestVersion: 2, components: [] }],
   ]) {

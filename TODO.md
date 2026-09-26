@@ -119,6 +119,14 @@ implementation (see `AGENTS.md`). Every fix adds regression coverage and passes
 - [x] Give `transparent-shortcuts` and `secure-defaults` a fallback for where
   to record deferred work or risk (for example, the handoff).
 
+## Open verification
+
+- [ ] **Confirm Grok Build follows the rules link.** Blocks moved to
+  `.agents/rules.md` behind one managed line in `AGENTS.md`. Claude Code imports
+  it and Codex followed it in smoke checks; Grok Build needs a trusted-folder
+  session to confirm. Done when: a trusted Grok session applies a block without
+  being asked to read the file, recorded in `docs/grok-build-compatibility.md`.
+
 ## Decisions
 
 - [x] **Decision: remove pre-rename migration code.** The rename changed state

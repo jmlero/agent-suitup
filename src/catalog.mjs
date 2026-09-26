@@ -293,7 +293,7 @@ function skillFile(remotePackage, componentId) {
   return file;
 }
 
-function readCatalogText(relative, componentId) {
+export function readCatalogText(relative, componentId) {
   const sourcePath = path.resolve(catalogRoot, relative);
   if (sourcePath !== catalogRoot && !sourcePath.startsWith(`${catalogRoot}${path.sep}`)) {
     throw new Error(`Catalog content escapes the package: ${componentId}`);

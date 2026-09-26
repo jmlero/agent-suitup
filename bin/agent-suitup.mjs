@@ -9,6 +9,7 @@ import {
   requireComponent,
   suggested,
 } from "../src/catalog.mjs";
+import { agentNames, agents, detectAgents } from "../src/agents.mjs";
 import { detectStack, humanSummary } from "../src/detect.mjs";
 import { formatPlan } from "../src/planner.mjs";
 import { Prompts, PromptCancelled, parseSelection } from "../src/prompts.mjs";
@@ -30,7 +31,9 @@ import {
   formatDryRunFooter,
   formatHealthy,
   formatInstallReview,
+  formatAgentChoices,
   formatListHeader,
+  formatNotes,
   formatProgress,
   formatProjectScan,
   formatSelection,
@@ -84,11 +87,12 @@ async function main() {
 async function initialize({ cwd, home, flags }) {
   const existing = readManifest(cwd);
   const detected = detectStack(cwd);
+  const detectedAgents = detectAgents({ cwd });
   const catalog = listComponents();
   const installedIds = new Set(existing?.components.map(({ id }) => id) ?? []);
-  maybeBanner("Build your toolkit: skills, working agreements, and integrations.");
+  maybeBanner("Set up rules, skills, and skill commands for your coding agents.");
   console.log(formatProjectScan({
-    cwd, stack: humanSummary(detected), catalogSize: catalog.length,
+    cwd, stack: humanSummary(detected), agents: agentNames([...detectedAgents]), catalogSize: catalog.length,
     suggestedCount: catalog.filter((component) => suggested(component, detected).pick).length,
     installedCount: installedIds.size,
   }));
@@ -102,20 +106,19 @@ async function initialize({ cwd, home, flags }) {
   }
   const prompt = new Prompts({ plain: flags.plain });
   try {
-    console.log(`\n${formatSetupStep(1)}`);
-    const candidates = flags.adapters === null ? catalog
-      : catalog.filter((component) => availableWithAdapters(component, flags.adapters));
-    const selectedIds = await chooseComponents(prompt, candidates, detected, installedIds, {
-      scope: flags.scope ?? "project", adapters: flags.adapters ?? existing?.adapters ?? [],
-      installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
-    });
+    const adapters = await chooseAgents(prompt, flags, existing, detectedAgents);
+    console.log(`\n${formatSetupStep(2)}`);
+    const selectedIds = await chooseComponents(prompt, catalog.filter((component) => availableWithAdapters(component, adapters)),
+      detected, installedIds, {
+        scope: flags.scope ?? "project", adapters,
+        installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
+      });
     if (!selectedIds.length) {
       console.log("No new components selected. Repository left unchanged.");
       return;
     }
     const components = selectedIds.map((id) => requireComponent(id));
-    console.log(`\n${formatSelection(components)}\n\n${formatSetupStep(2)}`);
-    const adapters = await chooseAdapters(prompt, flags, existing, components);
+    console.log(`\n${formatSelection(components)}`);
     const scope = flags.scope ?? (components.some((component) => component.scopes.length > 1)
       ? await chooseScope(prompt, "project") : "project");
     const byId = new Map((existing?.components ?? []).map((selection) => [selection.id, selection]));
@@ -142,34 +145,27 @@ async function add({ cwd, home, flags, values }) {
   let interactiveDefaultScope = null;
   let interactiveAdapters = null;
   let prompt;
-  maybeBanner("Add one explicit capability to agent-suitup.");
+  maybeBanner("Add rules, skills, and skill commands for your coding agents.");
 
   try {
     if (!selectedIds.length) {
       if (!process.stdin.isTTY && !flags.interactive) {
         throw new Error("Usage: agent-suitup add <component> [component...] or add --interactive");
       }
-      const adapters = flags.adapters ?? existing?.adapters ?? [];
       const installedIds = new Set(existing?.components.map(({ id }) => id) ?? []);
-      const candidates = flags.adapters === null
-        ? listComponents()
-        : listComponents().filter((component) => availableWithAdapters(component, adapters));
-      if (!candidates.length) {
-        console.log("No components available for the selected adapters.");
-        return;
-      }
       prompt = new Prompts({ plain: flags.plain });
-      console.log(`\n${formatSetupStep(1)}`);
+      interactiveAdapters = await chooseAgents(prompt, flags, existing, detectAgents({ cwd }));
+      console.log(`\n${formatSetupStep(2)}`);
+      const candidates = listComponents().filter((component) => availableWithAdapters(component, interactiveAdapters));
       selectedIds = await chooseComponents(prompt, candidates, detected, installedIds, {
-        scope: flags.scope ?? "project", adapters,
+        scope: flags.scope ?? "project", adapters: interactiveAdapters,
         installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
       });
       if (!selectedIds.length) {
         console.log("No new components selected. Repository left unchanged.");
         return;
       }
-      console.log(`\n${formatSetupStep(2)}`);
-      interactiveAdapters = await chooseAdapters(prompt, flags, existing, selectedIds.map(requireComponent));
+      console.log(`\n${formatSelection(selectedIds.map(requireComponent))}`);
       if (!flags.scope && selectedIds.some((id) => requireComponent(id).scopes.length > 1)) {
         interactiveDefaultScope = await chooseScope(prompt, "project");
       }
@@ -209,7 +205,7 @@ async function add({ cwd, home, flags, values }) {
 
 async function remove({ cwd, home, flags, values }) {
   if (!values.length && flags.adapters === null) {
-    throw new Error("Usage: agent-suitup remove <component> [component...] or remove --adapter <adapter>");
+    throw new Error("Usage: agent-suitup remove <component> [component...] or remove --agent <agent>");
   }
   const existing = readManifest(cwd, { required: true });
   const installed = new Set(existing.components.map(({ id }) => id));
@@ -226,22 +222,22 @@ async function remove({ cwd, home, flags, values }) {
     flags,
     writeManifest: true,
     displayComponents: values.map((id) => getComponent(id)).filter(Boolean),
-    action: values.length ? "Components removed" : "Adapters removed",
+    action: values.length ? "Components removed" : "Agents removed",
   });
 }
 
 function removeAdapters(existing, components, dropped) {
-  if (!dropped.length) throw new Error("remove --adapter needs claude, grok, or a comma-separated list");
+  if (!dropped.length) throw new Error("remove --agent needs claude, codex, grok, or a comma-separated list");
   const disabled = dropped.filter((adapter) => !existing.adapters.includes(adapter));
-  if (disabled.length) throw new Error(`Adapter not enabled: ${disabled.join(", ")}`);
+  if (disabled.length) throw new Error(`Agent not set up: ${disabled.join(", ")}`);
   const adapters = existing.adapters.filter((adapter) => !dropped.includes(adapter));
   const dependents = components.map(({ id }) => getComponent(id))
     .filter((component) => component?.adapters && !component.adapters.some((adapter) => adapters.includes(adapter)));
   if (dependents.length) {
     const ids = dependents.map(({ id }) => id).join(", ");
-    const required = [...new Set(dependents.flatMap((component) => component.adapters))].join(" or ");
+    const required = agentNames([...new Set(dependents.flatMap((component) => component.adapters))]).join(" or ");
     const one = dependents.length === 1;
-    throw new Error(`${ids} still require${one ? "s" : ""} the ${required} adapter; remove ${one ? "it" : "them"} first or in the same command`);
+    throw new Error(`${ids} still require${one ? "s" : ""} ${required}; remove ${one ? "it" : "them"} first or in the same command`);
   }
   return adapters;
 }
@@ -281,7 +277,8 @@ async function doctor({ cwd, home, flags }) {
   const lockMatches = jsonDocument(previousLock) === jsonDocument(result.lock);
   const drift = result.planner.hasChanges() || !lockMatches;
   if (!drift && !result.missingPrerequisites.length) {
-    console.log(formatHealthy(manifest.components.length, result.planner.notes.length > 0));
+    console.log(formatHealthy(manifest.components.length));
+    if (result.planner.notes.length) console.log(`\n${formatNotes(result.planner.notes)}`);
     return;
   }
 
@@ -360,7 +357,7 @@ async function applyDesired({
   }
   result.planner.apply();
   console.log(formatApplySummary(result.planner, {
-    components: displayComponents, action, reviewed: Boolean(prompt), suggestMore,
+    components: displayComponents, action, reviewed: Boolean(prompt), suggestMore, adapters: manifest.adapters,
   }));
 }
 
@@ -373,30 +370,48 @@ function componentScope(component, requested) {
 }
 
 async function chooseScope(prompt, fallback) {
-  console.log("Project keeps content in this repository; user makes it available across projects.");
+  console.log("\nSkills and skill commands can live in this project, or in your home folder for every project.");
   while (true) {
-    const answer = await prompt.question(`Default scope: project or user [${fallback}]: `);
+    const answer = await prompt.question(`Install them for: project or user [${fallback}]: `);
     const scope = answer.trim().toLowerCase() || fallback;
     if (new Set(["project", "user"]).has(scope)) return scope;
     console.log(`Invalid scope: ${scope}. Use project or user.`);
   }
 }
 
-async function chooseAdapters(prompt, flags, existing, components) {
-  const adapters = enableRequiredAdapters(withAdapters(existing, flags.adapters), components, flags.adapters);
-  if (flags.adapters !== null || components.every(({ kind }) => kind === "plugin")) return adapters;
-  const fallback = adapters.length === 2 ? "both" : adapters[0] ?? "portable";
-  console.log("Portable: canonical instructions and skills. Claude: add its bridges. Grok: add command wrappers.");
-  const choices = { portable: [], claude: ["claude"], grok: ["grok"], both: ["claude", "grok"] };
-  while (true) {
-    const answer = (await prompt.question(`Agent setup: portable, claude, grok, or both [${fallback}]: `)).trim().toLowerCase() || fallback;
-    if (!Object.hasOwn(choices, answer)) { console.log("Choose portable, claude, grok, or both."); continue; }
-    const chosen = choices[answer];
-    // Init adds capabilities; it does not remove adapters from an existing setup.
-    const enabled = [...new Set([...adapters, ...chosen])];
-    if (enabled.length) console.log(`Enabled adapters: ${enabled.join(", ")}. Existing and required adapters are kept.`);
-    return enabled;
+// Setup only adds agents: existing ones stay, and remove --adapter drops one.
+async function chooseAgents(prompt, flags, existing, detected) {
+  const current = existing?.adapters ?? [];
+  if (flags.adapters !== null) return withAdapters(existing, flags.adapters);
+  console.log(`\n${formatSetupStep(1)}`);
+  let chosen;
+  if (prompt.canPick()) chosen = await prompt.pickAgents({ enabled: current, detected });
+  else {
+    console.log(formatAgentChoices(detected, current));
+    while (!chosen) {
+      const answer = await prompt.question("Your agents (numbers or names, e.g. 1,3) [all]: ");
+      try {
+        chosen = parseAgentChoice(answer);
+      } catch (error) {
+        console.log(error.message);
+      }
+    }
   }
+  const enabled = withAdapters(existing, chosen);
+  console.log(`Agents: ${agentNames(enabled).join(", ")}`);
+  return enabled;
+}
+
+function parseAgentChoice(answer) {
+  const value = answer.trim().toLowerCase().replace(/claude code/g, "claude").replace(/grok build/g, "grok");
+  if (!value || value === "all") return agents.map(({ id }) => id);
+  const chosen = new Set();
+  for (const token of value.split(/[\s,]+/).filter(Boolean)) {
+    const agent = agents[Number(token) - 1] ?? agents.find(({ id }) => id === token);
+    if (!agent) throw new Error(`Unknown agent: ${token}. Use 1-${agents.length}, ${agents.map(({ id }) => id).join(", ")}, or all.`);
+    chosen.add(agent.id);
+  }
+  return [...chosen];
 }
 
 async function chooseComponents(prompt, components, detected, installedIds = new Set(), options = {}) {
@@ -404,7 +419,7 @@ async function chooseComponents(prompt, components, detected, installedIds = new
   if (prompt.canPick()) return prompt.pick(ordered, {
     ...options, installedIds, suggest: (component) => suggested(component, detected),
   });
-  console.log("\nExplore skills, blocks, commands, and integrations. Nothing is preselected.\n");
+  console.log("\nChoose blocks, skills, skill commands, and integrations. No item is preselected.\n");
   console.log(formatCatalog(ordered, { detected, installedIds, numbered: true, suggest: suggested }));
   console.log('\nUse numbers, ranges (1,3-5), component IDs, all, or none. Enter skips.');
   console.log('Type i <number or ID> to read its full guide before choosing. Installed items are kept.');
@@ -427,9 +442,11 @@ async function chooseComponents(prompt, components, detected, installedIds = new
   }
 }
 
-// Installing only adds adapters; remove --adapter is the explicit way to drop one.
+// Installing only adds agents; remove --agent is the explicit way to drop one.
+// A new project sets up every agent unless --agent narrows it.
 function withAdapters(existing, requested) {
-  return [...new Set([...(existing?.adapters ?? []), ...(requested ?? [])])];
+  const current = existing?.adapters ?? (requested === null ? agents.map(({ id }) => id) : []);
+  return [...new Set([...current, ...(requested ?? [])])];
 }
 
 function enableRequiredAdapters(adapters, components, explicitAdapters) {
@@ -472,14 +489,13 @@ function parseArguments(argv) {
     else if (value === "--plain") flags.plain = true;
     else if (value === "--dry-run") flags.dryRun = true;
     else if (value === "--force") flags.force = true;
-    else if (value === "--scope" || value === "--adapter" || value === "--adapters") {
+    else if (value === "--scope" || agentFlags.has(value)) {
       const next = argv[index + 1];
       if (!next || next.startsWith("-")) throw new Error(`${value} requires a value`);
       index += 1;
       setValueFlag(flags, value, next);
     } else if (value.startsWith("--scope=")) setValueFlag(flags, "--scope", value.slice(8));
-    else if (value.startsWith("--adapter=")) setValueFlag(flags, "--adapter", value.slice(10));
-    else if (value.startsWith("--adapters=")) setValueFlag(flags, "--adapters", value.slice(11));
+    else if (agentFlags.has(value.split("=")[0]) && value.includes("=")) setValueFlag(flags, "--agent", value.slice(value.indexOf("=") + 1));
     else if (value.startsWith("-")) throw new Error(`Unknown flag: ${value}`);
     else if (!command) command = value;
     else values.push(value);
@@ -487,6 +503,9 @@ function parseArguments(argv) {
 
   return { command: command ?? "init", flags, values };
 }
+
+// --agent is the documented name; --adapter predates it and stays accepted.
+const agentFlags = new Set(["--agent", "--agents", "--adapter", "--adapters"]);
 
 function setValueFlag(flags, name, value) {
   if (name === "--scope") {
@@ -501,7 +520,7 @@ function parseAdapters(value) {
   if (value.trim() === "none") return [];
   const adapters = value.split(",").map((adapter) => adapter.trim()).filter(Boolean);
   if (!adapters.length || adapters.some((adapter) => !supportedAdapters.includes(adapter))) {
-    throw new Error(`Invalid adapters: ${value}`);
+    throw new Error(`Invalid agents: ${value}. Use claude, codex, grok, a comma-separated list, or none.`);
   }
   return [...new Set(adapters)];
 }
@@ -510,13 +529,13 @@ function printHelp() {
   console.log(`agent-suitup ${version}
 
 Usage:
-  agent-suitup init [--interactive|--yes] [--adapter claude|grok]
+  agent-suitup init [--interactive|--yes] [--agent claude,codex,grok]
   agent-suitup list [blocks|skills|commands|integrations]
   agent-suitup inspect <component>
-  agent-suitup add [component...] [--scope project|user] [--adapter claude|grok]
+  agent-suitup add [component...] [--scope project|user] [--agent claude,codex,grok]
   agent-suitup plan
-  agent-suitup remove <component...> [--adapter claude|grok]
-  agent-suitup remove --adapter claude|grok
+  agent-suitup remove <component...> [--agent claude,codex,grok]
+  agent-suitup remove --agent claude|codex|grok
   agent-suitup update
   agent-suitup doctor
 
@@ -527,30 +546,28 @@ Options:
   --dry-run       Print exact changes without writing
   --force         Replace drifted managed content
   --scope VALUE   Default project or user scope
-  --adapter VALUE Vendor adapters: claude, grok, claude,grok, or none
-                  (alias --adapters); init and add only add adapters,
-                  remove --adapter drops them
+  --agent VALUE   Coding agents: claude, codex, grok, a comma-separated list,
+                  or none (alias --adapter); init and add only add agents,
+                  remove --agent drops one
   -h, --help      Show help
   --version       Show version
 
-Portable content installs canonically for every agent. Codex and Grok read the
-canonical files directly; adapters add only vendor-specific edges.
+Where content goes:
+  blocks        .agents/rules.md, linked from AGENTS.md by one managed line
+  skills        .agents/skills (Codex, Grok Build); Claude Code gets a link
+                in .claude/skills
+  commands      Skill commands: skills that run only when you invoke them,
+                /name in Claude Code and Grok Build, $name in Codex
+  integrations  Claude Code plugins enabled in .claude/settings.json
 
-Run init to explore the full catalog, connect your agent, and review.
-Tab, Shift+Tab, ←/→, or 1-5 switches categories; ↑/↓ browse; Space selects;
-i opens a full guide; / searches; s shows your selection; Enter continues.
-Nothing is preselected.
+Run init to choose your agents (all three by default), pick from the catalog,
+and review the files. Without --agent, add sets up all three in a new project.
+In the picker: ↑/↓ move, Space selects, Tab, Shift+Tab, ←/→, or 1-5 switch
+categories, i expands the details, / searches, s shows your selection, and
+Enter continues. No catalog item is preselected.
 Use --plain for numbered prompts. Ctrl+C cancels without writing.
 Esc clears a filter or exits the picker.
-init and add --interactive open the same control panel, including skills.
-Use inspect <component> for a read-only guide with examples and install paths.
-
-Component sections:
-  blocks        Always-on text managed inside AGENTS.md
-  skills        On-demand knowledge and workflows
-  commands      Explicit Agent Skills invoked as $name in Codex or /name in
-                Claude and Grok
-  integrations  Vendor-native plugins and language servers
+Use inspect <component> for a read-only guide with the exact text it adds.
 `);
 }
 

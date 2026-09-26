@@ -14,7 +14,7 @@ export function statePaths(cwd) {
   };
 }
 
-export const supportedAdapters = ["claude", "grok"];
+export const supportedAdapters = ["claude", "codex", "grok"];
 
 export function emptyManifest(adapters = []) {
   return { manifestVersion: 2, adapters, components: [] };

@@ -39,9 +39,9 @@ recorded. Nothing is installed merely because it exists in the catalog.
 
 | Surface | Correct use | Loading |
 |---|---|---|
-| Direct block | An explicit project agreement that applies across relevant changes | Always through `AGENTS.md` |
+| Direct block | An explicit project agreement that applies across relevant changes | Always, through `.agents/rules.md` linked from `AGENTS.md` |
 | Skill | A recognizable task with a procedure, examples, or references | On demand |
-| Command | A workflow that should run only when explicitly invoked | Explicit |
+| Skill command | A skill that should run only when explicitly invoked | Explicit |
 | Reference | Background detail used by a skill, not a standalone behavior | Selective |
 | Integration | Vendor-native capability with an operational prerequisite | Optional and agent-specific |
 | Nothing | Facts or behavior reliably inferable from code, configuration, or current models | No context cost |
@@ -63,16 +63,26 @@ Working agreements and task workflows are both core offerings. Users should
 understand the behavior, applicability, and tradeoffs before choosing it. File
 format or catalog size should not determine which capability matters most.
 
-`AGENTS.md` is the canonical portable project instruction file. Blocks are
-defined once and embedded directly, without mandatory links whose only purpose
-is recovering a few lines of required text.
+The supported agents are Claude Code, Codex, and Grok Build. All three are set
+up by default so every component works with each of them; setup lets a project
+deselect the ones it does not use. `AGENTS.md` is the portable entry point every one of
+them reads. Blocks are defined once in `.agents/rules.md`; `AGENTS.md` gains a
+single managed line that links it, so the project's own instruction file keeps
+minimal overhead. Claude Code expands the `@` import at session start. Codex
+and Grok Build do not expand imports; the line tells them to read the file, so
+loading depends on the model following it. Representative sessions should
+confirm that it does.
 
-Portable skills and commands live in `.agents/skills`. Codex and Grok Build use
-the canonical files directly. Thin adapters expose them to other agents without
-duplicating the core content.
+Portable skills and skill commands live in `.agents/skills`. Codex and Grok Build use
+the canonical files directly. Claude Code reads only `.claude/skills`, so it
+gets a link to the same folder; skill commands get thin slash-only wrappers
+where an agent would otherwise start them on its own. No adapter duplicates the
+core content.
 
-`AGENTS.md` is the only instruction file agent-suitup writes. Claude Code reads
-it directly, so agent-suitup never creates, edits, or links `CLAUDE.md`.
+`AGENTS.md` and `.agents/rules.md` are the only instruction files agent-suitup
+writes. Claude Code reads `AGENTS.md` directly when no `CLAUDE.md` exists, so
+agent-suitup never creates, edits, or links `CLAUDE.md`; it reports when one
+would hide `AGENTS.md`.
 
 ### Assessment before installation
 
@@ -99,8 +109,8 @@ Every managed component has a stable identity, source, version, scope, and
 integrity record. Operations are idempotent, reversible, inspectable,
 updateable, and reproducible.
 
-`AGENTS.md` uses compact ownership boundaries. Versions and checksums live in
-the lockfile rather than being repeated inside the prompt.
+`AGENTS.md` and `.agents/rules.md` use compact ownership boundaries. Versions
+and checksums live in the lockfile rather than being repeated inside the prompt.
 
 The CLI never overwrites unowned content. Ambiguous ownership or local drift is
 reported and requires explicit resolution.
@@ -140,15 +150,17 @@ license-preserving, bounded, and loaded on demand.
 
 ## Current CLI
 
-Interactive `init` and `add --interactive` open a terminal control panel with
-category tabs for skills, blocks, commands, and integrations. A searchable catalog
-and detail panel explain purpose, applicability, examples, tradeoffs, loading,
-and installation. The full guide remains readable in small terminals. Installed
-items stay visible; no new items are preselected. Skills can be installed alone.
+Interactive `init` and `add --interactive` start by asking which agents the
+project uses, then open a terminal control panel with category tabs for
+blocks, skills, skill commands, and integrations. A searchable catalog and details
+panel explain purpose, applicability, examples, and tradeoffs, and show the
+files each chosen agent reads and the exact text an item adds. The full guide
+remains readable in small terminals. Installed items stay visible; no new items
+are preselected. Skills can be installed alone.
 
-After selection, Connect chooses agent bridges and scope. The final review shows
-destinations, aggregate block cost, and an optional exact preview before any
-writes. Numbered prompts support inline inspection through `--plain` and piped
+After selection, setup asks for a scope when it matters. The final review shows
+agents, destinations, aggregate block cost, and an optional exact preview before
+any writes. Numbered prompts support inline inspection through `--plain` and piped
 input; `inspect <component>` shows a read-only guide without remote downloads.
 
 ```text
@@ -162,7 +174,7 @@ agent-suitup add command/verify-work
 agent-suitup add plugin/github          # optional Claude edge
 agent-suitup plan                       # preview exact changes
 agent-suitup remove <component>         # remove only owned state
-agent-suitup remove --adapter grok      # drop an adapter's files
+agent-suitup remove --agent grok        # drop an agent's files
 agent-suitup update                     # refresh visible, pinned content
 agent-suitup doctor                     # detect drift and missing prerequisites
 ```
@@ -191,6 +203,7 @@ and `--dry-run`.
 - A growing catalog can recreate the context and maintenance bloat it opposes.
 - Marketplace identifiers, prerequisites, and remote skills change over time.
 - Symlinks are not equally portable; bridges require a safe import fallback.
+- Codex and Grok Build load linked rules only when the model follows the link.
 - The `agent-suitup` name still needs registry, executable, domain, and
   trademark checks before public release.
 

@@ -6,8 +6,9 @@ reliably followed by your agent. Selecting no blocks is a valid outcome.
 
 This guide explains editorial choices for the current catalog. The examples
 are hypothetical adoption decisions, not observed model improvements. Source
-links show the exact instructions that will be installed; this guide adds no
-exceptions to those instructions and is not loaded into your project's context.
+links show the exact instructions that will be installed in `.agents/rules.md`,
+which `AGENTS.md` links; this guide adds no exceptions to those instructions and
+is not loaded into your project's context.
 
 ## `block/tdd` — Test-driven development
 

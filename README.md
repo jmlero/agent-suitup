@@ -4,9 +4,11 @@ A dependency-free CLI for adding curated coding-agent instructions and task
 workflows to your projects. Choose the agreements that fit, preview the changes,
 and maintain them without copying instructions between repositories.
 
-Blocks live directly in `AGENTS.md`; skills and explicit commands live in
-`.agents/skills`. Installed content stays readable and useful without the CLI.
-Every component is opt-in, and selecting nothing is a valid outcome.
+Supports Claude Code, Codex, and Grok Build. Blocks live in `.agents/rules.md`,
+which `AGENTS.md` links with one managed line. Skills and skill commands live in
+`.agents/skills`, and each agent you choose gets the files it reads. Installed
+content stays readable and useful without the CLI. Every component is opt-in,
+and selecting nothing is a valid outcome.
 
 ## Get started
 
@@ -22,25 +24,30 @@ Run commands from the project you want to configure:
 agent-suitup init
 ```
 
-Setup opens a terminal control panel with three steps: **Explore → Connect →
-Review**. Browse **Skills, Blocks, Commands, and Integrations** in one place,
-choose your agent and installation scope, then review the files before installing.
-Nothing is preselected. Skills can be installed on their own.
+Setup has three steps: **Agents → Choose → Review**. All three agents (Claude
+Code, Codex, and Grok Build) start selected, so everything you install works
+with each of them; deselect any you do not use. Agents found on your `PATH` or
+in the project are marked as detected. Then browse **Blocks, Skills, Skill
+commands, and Integrations** in one place, choose an installation scope, and
+review the files before installing. No catalog item is preselected. Skills can
+be installed on their own.
 
 - **Tab**, **Shift+Tab**, **← / →**, or **1–5** switches categories. **↑ / ↓**
   browses, **Space** selects, and **Enter** continues.
 - **/** to search; Enter keeps the filter and Esc clears it. Pasted text goes to
   the search, so it never triggers shortcuts. Selections survive filtering. **a**
   toggles all visible items; **n** clears the selection.
-- A detail panel explains what each item does and when it fits. **i** opens its
-  full guide: example, tradeoffs, loading cost, install path, and usage. Scroll
-  with arrows or Page Up / Page Down; Enter or Esc returns to the catalog.
+- The details panel shows what each item does, when it fits, the files each
+  chosen agent reads, and the exact text it adds: a block's rules, a skill's
+  `SKILL.md`, or a plugin's settings entry. **i** expands it to the full screen.
+  Scroll with arrows or Page Up / Page Down; Enter or Esc returns to the list.
 - **s** shows your selection. Totals update live; installed items are marked and
   kept in place. Wide terminals show two panels; smaller ones use a compact view.
 - At review, **p** shows exact changes, **Enter** installs, and **n** cancels.
 
 Use `init --plain` for numbered prompts, including with screen readers. This
-mode also activates for piped input, small terminals, and `TERM=dumb`. It accepts
+mode also activates for piped input, small terminals, and `TERM=dumb`. Agents
+are chosen by number or name (`1,2` or `claude,codex`). The catalog accepts
 numbers, ranges (`1,3-5`), component IDs, `all`, or `none`, and lets you correct
 invalid answers. Type `i <number or ID>` to read an item's guide. Use
 `--interactive` when piping answers and `NO_COLOR=1` to
@@ -50,7 +57,7 @@ input never approves an installation.
 
 Finishing without a selection leaves project and user files unchanged, including
 existing installations. `init --yes` always performs a read-only assessment.
-Adapter, scope, and force flags do not turn an empty selection or assessment
+Agent, scope, and force flags do not turn an empty selection or assessment
 into an installation or repair.
 
 To choose a component explicitly, preview it and then apply it:
@@ -63,7 +70,17 @@ agent-suitup add block/completion-evidence
 
 ## Catalog
 
-Blocks express project working agreements. Use the
+Blocks express project working agreements that apply to every session. They
+are written to `.agents/rules.md`, and `AGENTS.md` gets one line pointing to it:
+
+```markdown
+<!--as:rules-->
+Project rules: read and follow @.agents/rules.md before starting any task.
+<!--/as:rules-->
+```
+
+Claude Code expands the `@` import when a session starts. Codex and Grok Build
+do not expand imports, so the line tells them to open the file. Use the
 [selection guide](docs/choosing-blocks.md) for applicability, reasons to skip,
 tradeoffs, and links to the exact instructions.
 
@@ -89,9 +106,10 @@ agent-suitup add skill/review-pr
 ```
 
 Then ask your agent: **“Use review-pr to review this diff.”** Project skills live
-in `.agents/skills/<name>/SKILL.md`. Add `--scope user` to install under
-`~/.agents/skills` for use across projects. For Claude, choose **claude** during
-setup or pass `--adapter claude` to create its skill bridge.
+in `.agents/skills/<name>/SKILL.md`, where Codex and Grok Build read them. Claude
+Code only reads `.claude/skills`, so choosing it adds a link there to the same
+folder. Add `--scope user` to install under `~/.agents/skills` for use across
+projects.
 
 | Skill | Use it for |
 |---|---|
@@ -123,31 +141,35 @@ exact bytes, and downloads time out after 30 seconds. Browsing and `inspect` do
 not download them. Skill bodies load on demand; agents may keep their discovery
 metadata in context.
 
-Explicit commands provide verification and commit workflows. Install with, for
-example, `agent-suitup add command/verify-work`.
-
-Invoke command skills as `$verify-work` or `$commit-work` in Codex, and
-`/verify-work` or `/commit-work` with the Claude or Grok adapters. Codex and
-both adapters block implicit invocation, so a command runs only when you invoke
-it.
+Skill commands are skills that run only when you invoke them, for workflows
+with side effects such as verifying or committing. They use the same `SKILL.md`
+format; the difference is that the agent never starts them on its own. Install
+with, for example, `agent-suitup add command/verify-work`, then run
+`/verify-work` in Claude Code or Grok Build, or `$verify-work` in Codex.
 
 The CLI reports individual and aggregate block costs. Words are counted by
 splitting trimmed, normalized Markdown on whitespace; tokens are estimated as
 normalized UTF-8 bytes divided by four, rounded up. Costs inform selection and
 review; there is no minimum or maximum token count for a valid block.
 
-## Agent integrations
+## Agents
 
-Codex and Grok Build read the canonical instructions and skills directly.
-`--adapter grok` adds explicit command wrappers; see the
-[tested compatibility matrix](docs/grok-build-compatibility.md) for details.
+Every agent reads `AGENTS.md`; they differ in where they find skills and how
+skill commands stay explicit:
 
-`--adapter claude` links skills from `.claude/skills` and gives commands a
-slash-only wrapper there. Claude Code reads `AGENTS.md` directly, so
-agent-suitup never creates or edits `CLAUDE.md`.
+| Agent | Rules | Skills | Skill commands |
+|---|---|---|---|
+| Claude Code | `@` import from `AGENTS.md` | `.claude/skills/<name>`, a link to `.agents/skills/<name>` | Slash-only wrapper in `.claude/skills` |
+| Codex | Reads `.agents/rules.md` when `AGENTS.md` tells it to | `.agents/skills` | `$name`; `agents/openai.yaml` blocks implicit use |
+| Grok Build | Reads `.agents/rules.md` when `AGENTS.md` tells it to | `.agents/skills` | Slash-only wrapper in `.grok/skills` |
 
-Optional Claude plugins require the `claude` adapter, which `add` enables when
-needed:
+Claude Code reads `AGENTS.md` only when the project has no `CLAUDE.md`. If one
+exists and does not import `@AGENTS.md`, agent-suitup reports a manual step
+instead of editing it. See the
+[Grok Build compatibility notes](docs/grok-build-compatibility.md) for details.
+
+Optional Claude Code plugins require Claude Code as an agent, which `add`
+enables when needed:
 
 | Plugin | Adds to Claude | Needs separately |
 |---|---|---|
@@ -168,30 +190,32 @@ plugin's executable later goes missing, `doctor` reports it and other commands
 continue. Authentication and runtime setup remain separate from installation.
 
 ```bash
-agent-suitup add command/verify-work --adapter grok
+agent-suitup add command/verify-work --agent grok
 agent-suitup add plugin/github
 ```
 
-### Choose and remove adapters
+### Choose and remove agents
 
-`--adapter` (alias `--adapters`) accepts `claude`, `grok`, a comma-separated
-list such as `claude,grok`, or `none` for portable content only. With `list`,
-`init`, and `add --interactive`, it limits the catalog to components that work
-with those adapters.
+`--agent` (alias `--adapter`) accepts `claude`, `codex`, `grok`, a
+comma-separated list such as `claude,codex`, or `none` for the shared files
+only. Passing it skips the agent question. Without it, `add` sets up all three
+agents in a new project and keeps the agents an existing project already has. With `list`, `init`, and
+`add --interactive`, it limits the catalog to components that work with those
+agents.
 
-`init` and `add` only add adapters: existing adapters are always kept, whether
-you pass `--adapter` or choose an agent at the setup prompt. `--adapter none`
-adds nothing and does not enable adapters that components would otherwise
-require. To drop an adapter, use `remove --adapter`. agent-suitup removes the
-files it created for that adapter; canonical content stays in place:
+`init` and `add` only add agents: existing agents are always kept, whether you
+pass `--agent` or choose at the setup prompt. `--agent none` adds nothing and
+does not enable agents that components would otherwise require. To drop an
+agent, use `remove --agent`. agent-suitup removes the files it created for that
+agent; the shared content stays in place:
 
 ```bash
-agent-suitup remove --adapter grok --dry-run
-agent-suitup remove --adapter grok
+agent-suitup remove --agent grok --dry-run
+agent-suitup remove --agent grok
 ```
 
-Claude plugins require the `claude` adapter. Remove them first, or in the same
-command: `agent-suitup remove plugin/github --adapter claude`.
+Claude Code plugins require Claude Code. Remove them first, or in the same
+command: `agent-suitup remove plugin/github --agent claude`.
 
 ## Manage an installation
 
@@ -203,10 +227,10 @@ command: `agent-suitup remove plugin/github --adapter claude`.
 | `plan` | Preview reconciliation of the existing installation |
 | `update` | Apply updates and repair missing content |
 | `remove <component...>` | Remove selected managed components |
-| `remove --adapter <adapter>` | Drop an adapter and the files it added |
+| `remove --agent <agent>` | Drop an agent and the files it added |
 | `doctor` | Check drift and known prerequisites without writing |
 
-Prefix commands with `agent-suitup`. Skills and commands support
+Prefix commands with `agent-suitup`. Skills and skill commands support
 `--scope project` or `--scope user`; blocks are project-only. Use `--help` for
 all flags. Normal output is compact; `plan` and `--dry-run` show exact changes.
 
@@ -215,6 +239,8 @@ versions, pins, and integrity records in `.agent-suitup/lock.json`. Keep
 these files in version control alongside the installed content.
 
 Text outside managed blocks is preserved, and so are existing file permissions.
+Blocks installed by earlier releases directly in `AGENTS.md` move to
+`.agents/rules.md` on the next `update`.
 Removal deletes only files agent-suitup created; identical files that existed
 before installation are kept and reported. Skill directories left empty by a
 removal are deleted; directories that still hold other files are kept. Local edits and unexpected file or

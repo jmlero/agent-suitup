@@ -1,4 +1,6 @@
+import fs from "node:fs";
 import path from "node:path";
+import { agentNames } from "./agents.mjs";
 import { ClaudeSettingsEditor } from "./adapters/claude.mjs";
 import { commandBridge, commandBridgeAgents } from "./adapters/commands.mjs";
 import {
@@ -17,6 +19,14 @@ import { managedPayload, removeManagedBlock, upsertManagedBlock } from "./manage
 import { ConflictError, Planner } from "./planner.mjs";
 import { portablePath, resolvePortablePath } from "./paths.mjs";
 
+// Blocks live in one owned rules file. AGENTS.md, which every supported agent
+// reads, carries a single managed line pointing to it. Claude Code expands the
+// @ import at session start; Codex and Grok open the file when told to.
+export const rulesFile = ".agents/rules.md";
+export const rulesLinkId = "rules";
+export const rulesLink = `Project rules: read and follow @${rulesFile} before starting any task.`;
+const claudeInstructionFiles = ["CLAUDE.md", ".claude/CLAUDE.md", "CLAUDE.local.md"];
+
 export async function reconcile({
   cwd,
   home,
@@ -33,6 +43,11 @@ export async function reconcile({
   const nextLock = { lockfileVersion: 1, components: {} };
   const desiredIds = new Set(manifest.components.map(({ id }) => id));
   const missingPrerequisites = [];
+  // Decided before any write, so every block records who created the shared files.
+  const shared = {
+    rulesCreated: sharedFileCreated(previousLock, path.join(cwd, rulesFile), planner),
+    linkCreated: sharedFileCreated(previousLock, path.join(cwd, "AGENTS.md"), planner),
+  };
 
   for (const selection of manifest.components) {
     const component = requireComponent(selection.id);
@@ -61,6 +76,7 @@ export async function reconcile({
       home,
       force,
       refreshRemote,
+      shared,
     });
     removeStaleFiles(previous, entry, planner);
     nextLock.components[component.id] = entry;
@@ -71,6 +87,10 @@ export async function reconcile({
     uninstallComponent({ id, previous, component: getComponent(id), planner, claude, cwd, home, force });
   }
 
+  syncRulesLink({ planner, cwd, force, previousLock, nextLock, shared });
+  if (manifest.adapters.includes("claude") && Object.values(nextLock.components).some(({ kind }) => kind === "block")) {
+    noteShadowedInstructions(planner, cwd);
+  }
   claude.flush(planner);
   return { planner, lock: nextLock, missingPrerequisites };
 }
@@ -107,14 +127,9 @@ async function installComponent(context) {
   return entry;
 }
 
-function installBlock({ component, previous, planner, cwd, force }, entry, content) {
-  const file = path.join(cwd, "AGENTS.md");
-  const current = planner.state(file);
-  if (!new Set(["missing", "file"]).has(current.kind)) {
-    throw new ConflictError(`Cannot manage ${planner.label(file)}: it is a ${current.kind}`);
-  }
-  assertTextDocument(current, file, planner);
-  const document = current.kind === "file" ? current.content : "";
+function installBlock({ component, previous, planner, cwd, force, shared }, entry, content) {
+  const file = path.join(cwd, rulesFile);
+  const document = textDocument(planner, file);
   const payload = managedPayload(document, component.id);
   if (payload) {
     const expected = previous?.integrity ?? entry.integrity;
@@ -122,12 +137,16 @@ function installBlock({ component, previous, planner, cwd, force }, entry, conte
       throw new ConflictError(`Managed block has local changes: ${component.id}`);
     }
   }
-  planner.write(file, upsertManagedBlock(document, component, content), { allowExisting: true });
-  const previousFile = findFile(previous, file, planner);
+  // Earlier releases embedded blocks in AGENTS.md; move them to the rules file.
+  for (const record of previous?.files ?? []) {
+    const recorded = resolvePortablePath(record.path, planner);
+    if (record.kind === "block" && recorded !== file) removeBlockSegment(component.id, previous, recorded, planner, force);
+  }
+  planner.write(file, upsertManagedBlock(textDocument(planner, file), component, content), { allowExisting: true });
   entry.files.push(fileRecord(file, "block", planner, {
     id: component.id,
     integrity: entry.integrity,
-    created: previousFile?.created ?? current.kind === "missing",
+    created: shared.rulesCreated,
   }));
 }
 
@@ -254,7 +273,7 @@ async function resolveSkillPackage({ component, previous, planner, cwd, home, fo
 
 function uninstallComponent({ id, previous, component, planner, claude, cwd, home, force }) {
   if (previous.kind === "block") {
-    uninstallBlock(id, previous, planner, cwd, force);
+    uninstallBlock(id, previous, planner, force);
   } else {
     removeFiles(previous.files, planner);
   }
@@ -266,8 +285,13 @@ function uninstallComponent({ id, previous, component, planner, claude, cwd, hom
   }
 }
 
-function uninstallBlock(id, previous, planner, cwd, force) {
-  const file = path.join(cwd, "AGENTS.md");
+function uninstallBlock(id, previous, planner, force) {
+  for (const record of previous.files ?? []) {
+    if (record.kind === "block") removeBlockSegment(id, previous, resolvePortablePath(record.path, planner), planner, force);
+  }
+}
+
+function removeBlockSegment(id, previous, file, planner, force) {
   const current = planner.state(file);
   if (current.kind === "missing") return;
   if (current.kind !== "file") throw new ConflictError(`Managed file changed type: ${planner.label(file)}`);
@@ -277,10 +301,70 @@ function uninstallBlock(id, previous, planner, cwd, force) {
   if (integrity(payload) !== previous.integrity && !force) {
     throw new ConflictError(`Managed block has local changes: ${id}`);
   }
-  const result = removeManagedBlock(current.content, id);
-  const record = previous.files?.find((candidate) => candidate.kind === "block");
-  if (!result && record?.created) planner.delete(file, { owned: true, expectedKind: "file" });
-  else planner.write(file, result, { allowExisting: true });
+  planner.write(file, removeManagedBlock(current.content, id), { allowExisting: true });
+}
+
+// Adds the AGENTS.md link while any block is installed and removes it with the
+// last one. Shared files agent-suitup created are deleted once they are empty.
+function syncRulesLink({ planner, cwd, force, previousLock, nextLock, shared }) {
+  const file = path.join(cwd, "AGENTS.md");
+  const blocks = Object.values(nextLock.components).filter(({ kind }) => kind === "block");
+  const document = textDocument(planner, file);
+  const payload = managedPayload(document, rulesLinkId);
+  const recorded = Object.values(previousLock.components).flatMap((entry) => entry.files ?? [])
+    .find((record) => record.kind === "link")?.integrity;
+  const expected = integrity(normalizeText(rulesLink));
+  if (payload && ![recorded ?? expected, expected].includes(integrity(payload)) && !force) {
+    throw new ConflictError("Managed block has local changes: AGENTS.md link to the rules file");
+  }
+  if (blocks.length) {
+    planner.write(file, upsertManagedBlock(document, { id: rulesLinkId }, rulesLink), { allowExisting: true });
+    for (const entry of blocks) {
+      entry.files.push(fileRecord(file, "link", planner, { integrity: expected, created: shared.linkCreated }));
+    }
+  } else if (payload) {
+    planner.write(file, removeManagedBlock(document, rulesLinkId), { allowExisting: true });
+  }
+  for (const [target, created] of [[path.join(cwd, rulesFile), shared.rulesCreated], [file, shared.linkCreated]]) {
+    const current = planner.state(target);
+    if (created && current.kind === "file" && typeof current.content === "string" && !current.content.trim()) {
+      planner.delete(target, { owned: true, expectedKind: "file", pruneBelow: cwd });
+    }
+  }
+}
+
+// Claude Code reads CLAUDE.md instead of AGENTS.md when both exist, unless
+// CLAUDE.md imports it.
+function noteShadowedInstructions(planner, cwd) {
+  const present = claudeInstructionFiles.filter((name) => {
+    const file = path.join(cwd, name);
+    return fs.existsSync(file) && fs.statSync(file).isFile();
+  });
+  if (!present.length) return;
+  const imports = present.some((name) => /(^|\s)@(\.\/)?(AGENTS\.md|\.agents\/rules\.md)(\s|$)/m
+    .test(fs.readFileSync(path.join(cwd, name), "utf8")));
+  if (!imports) {
+    planner.note(`Claude Code reads ${present.join(" and ")} instead of AGENTS.md, so it skips ${rulesFile}; add a line with @AGENTS.md to ${present[0]}`);
+  }
+}
+
+// Whether agent-suitup created a file every block shares, such as AGENTS.md.
+function sharedFileCreated(previousLock, file, planner) {
+  const encoded = portablePath(file, planner);
+  const records = Object.values(previousLock.components)
+    .filter((entry) => entry.kind === "block")
+    .flatMap((entry) => entry.files ?? [])
+    .filter((record) => record.path === encoded);
+  return records.length ? records.some((record) => record.created) : planner.state(file).kind === "missing";
+}
+
+function textDocument(planner, file) {
+  const current = planner.state(file);
+  if (!new Set(["missing", "file"]).has(current.kind)) {
+    throw new ConflictError(`Cannot manage ${planner.label(file)}: it is a ${current.kind}`);
+  }
+  assertTextDocument(current, file, planner);
+  return current.kind === "file" ? current.content : "";
 }
 
 function assertTextDocument(current, file, planner) {
@@ -292,12 +376,15 @@ function assertTextDocument(current, file, planner) {
 function removeStaleFiles(previous, next, planner) {
   if (!previous?.files) return;
   const desired = new Set(next.files.map(({ path: file }) => file));
-  removeFiles(previous.files.filter((file) => file.kind !== "block" && !desired.has(file.path)), planner);
+  removeFiles(previous.files.filter((file) => !sharedKinds.has(file.kind) && !desired.has(file.path)), planner);
 }
+
+// Records of managed segments in shared documents, not files of their own.
+const sharedKinds = new Set(["block", "link"]);
 
 function removeFiles(files = [], planner) {
   for (const record of files) {
-    if (record.kind === "block") continue;
+    if (sharedKinds.has(record.kind)) continue;
     const file = resolvePortablePath(record.path, planner);
     // An adopted file existed before installation, so removal leaves it to its owner.
     if (record.created === false) {
@@ -331,7 +418,7 @@ function validateSelection(component, selection, adapters) {
   }
   if (component.adapters
     && !adapters.some((adapter) => component.adapters.includes(adapter))) {
-    throw new Error(`${component.id} requires one of these adapters: ${component.adapters.join(", ")}`);
+    throw new Error(`${component.id} requires ${agentNames(component.adapters).join(" or ")} (--agent ${component.adapters.join(",")})`);
   }
 }
 

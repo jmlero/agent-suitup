@@ -7,7 +7,9 @@ import { stripVTControlCharacters } from "node:util";
 import test from "node:test";
 import { listComponents } from "../src/catalog.mjs";
 import { displayWidth } from "../src/dashboard.mjs";
-import { Picker, Prompts, PromptCancelled, parseSelection, pickComponents, pickerFrame } from "../src/prompts.mjs";
+import {
+  AgentPicker, Picker, Prompts, PromptCancelled, agentFrame, parseSelection, pickAgents, pickComponents, pickerFrame,
+} from "../src/prompts.mjs";
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -68,14 +70,16 @@ test("picker fits small terminals, scrolls to focus, and shows aggregate block c
     assert.ok(frame.length < rows, `${frame.length} lines for ${rows} rows`);
     assert.ok(frame.every((line) => Array.from(line).length <= columns - 2));
     assert.match(frame.join("\n"), /Focused changes/);
-    assert.match(frame.join("\n"), /8 selected · 456w always · ~781t/);
+    assert.match(frame.join("\n"), /8 selected · \+456 words always on/);
+    if (columns >= 62) assert.match(frame.join("\n"), /\(~781 tokens\)/);
   }
   assert.match(pickerFrame(picker, { columns: 32, rows: 10 }).join("\n"), /Resize/);
 });
 
 test("categories, selection view, and full guides preserve choices and installed items", () => {
   const picker = new Picker(components, { installedIds: new Set(["skill/audit-code"]) });
-  picker.handle("2");
+  assert.deepEqual(picker.tabs.map(({ label }) => label), ["All", "Blocks", "Skills", "Skill commands", "Integrations"]);
+  picker.handle("3");
   assert.ok(picker.visible.every(({ kind }) => kind === "skill"));
   picker.handle(" ");
   assert.equal(picker.selection.length, 0, "installed items cannot be selected or removed");
@@ -88,7 +92,7 @@ test("categories, selection view, and full guides preserve choices and installed
   assert.equal(picker.handle("", { name: "return" }), undefined, "Enter closes the guide, never submits");
   assert.equal(picker.inspected, null);
   picker.handle("", { name: "tab" });
-  assert.equal(picker.tab, "block");
+  assert.equal(picker.tab, "command");
   picker.handle(" ");
   picker.handle("s");
   assert.equal(picker.visible.length, 2);
@@ -99,13 +103,13 @@ test("categories, selection view, and full guides preserve choices and installed
   picker.handle("", { name: "escape" });
   picker.handle("s");
   assert.equal(picker.tab, "all");
-  picker.handle("2");
+  picker.handle("3");
   picker.handle("a");
   assert.equal(picker.selection.filter(({ kind }) => kind === "skill").length,
     components.filter(({ kind }) => kind === "skill").length - 1);
   assert.ok(!picker.selected.has("skill/audit-code"));
   picker.handle("", { name: "tab", shift: true });
-  assert.equal(picker.tab, "all");
+  assert.equal(picker.tab, "block");
 });
 
 test("all component guides can be read completely at every supported terminal size", () => {
@@ -122,7 +126,8 @@ test("all component guides can be read completely at every supported terminal si
         if (picker.detailOffset === picker.detailMaximum) break;
         picker.handle("", { name: "down" });
       } while (true);
-      for (const heading of ["WHAT IT DOES", "USE WHEN", "EXAMPLE", "CONSIDER", "LOADING", "INSTALLS TO", "SOURCE"]) {
+      const headings = ["Use when", "Consider", "Source", "Files", component.kind === "block" ? "Adds to .agents/rules.md" : component.kind === "plugin" ? "Adds to .claude/settings.json" : "SKILL.md"];
+      for (const heading of headings) {
         assert.ok(transcript.includes(heading), `${component.id}: missing ${heading} at ${columns}x${rows}`);
       }
       assert.equal(picker.selection.length, 0, "reading never selects a component");
@@ -130,7 +135,7 @@ test("all component guides can be read completely at every supported terminal si
   }
 });
 
-test("colored dashboards retain borders and fit terminal dimensions", (context) => {
+test("colored dashboards fit terminal dimensions and keep the column divider", (context) => {
   const oldForce = process.env.FORCE_COLOR;
   const oldNoColor = process.env.NO_COLOR;
   process.env.FORCE_COLOR = "1";
@@ -140,13 +145,15 @@ test("colored dashboards retain borders and fit terminal dimensions", (context) 
     if (oldNoColor === undefined) delete process.env.NO_COLOR; else process.env.NO_COLOR = oldNoColor;
   });
   const picker = new Picker(components);
-  picker.handle("2");
-  const frame = pickerFrame(picker, { columns: 80, rows: 24 });
-  assert.match(frame.join("\n"), /\x1b\[1;30;46m/);
+  picker.handle("3");
+  const frame = pickerFrame(picker, { columns: 80, rows: 24, adapters: ["claude"] });
+  assert.match(frame[1], /\x1b\[1;7m Skills 8 \x1b\[0m/, "the active category is highlighted");
   const plain = frame.map(stripVTControlCharacters);
-  assert.ok(plain.every((line) => line.length <= 78));
-  assert.match(plain.join("\n"), /WHAT IT DOES[\s\S]*USE WHEN/);
-  assert.ok(plain.filter((line) => line.startsWith("│")).every((line) => line.endsWith("│")));
+  assert.ok(plain.every((line) => displayWidth(line) <= 78));
+  assert.match(plain[0], /^agent-suitup · Claude Code\s+✓ Agents › Choose › Review$/);
+  assert.match(plain.join("\n"), /Skills  loaded when relevant[\s\S]*Use when[\s\S]*Example/);
+  const body = plain.slice(3, plain.lastIndexOf(plain[2]));
+  assert.ok(body.every((line) => line.indexOf(" │ ") === 32), "list and details share one divider column");
 });
 
 test("piped prompts buffer early answers and cancel explicitly at EOF", async () => {
@@ -285,10 +292,10 @@ test("category tabs wrap before they would be truncated", () => {
   const picker = new Picker(components);
   for (const columns of [55, 75, 80]) {
     const frame = pickerFrame(picker, { columns, rows: 24 }).map(stripVTControlCharacters);
-    const tabRows = frame.slice(2, frame.findIndex((line) => line.startsWith("Browse every category")));
+    const tabRows = frame.slice(1, frame.findIndex((line) => line.startsWith("─")));
     assert.ok(tabRows.length, `${columns}: no tab row`);
     assert.ok(tabRows.every((line) => !line.includes("…") && displayWidth(line) <= columns - 2), `${columns}: ${tabRows}`);
-    assert.match(tabRows.join(" "), /1 All.*2 Skills.*3 Blocks.*4 Commands.*5 Integrations/);
+    assert.match(tabRows.join(" "), /All 23.*Blocks 8.*Skills 8.*Skill commands 2.*Integrations 5/);
   }
 });
 
@@ -301,10 +308,10 @@ test("Tab and Shift+Tab from the selection view move next to the category it cam
   assert.equal(picker.tab, "command");
   picker.handle("s");
   picker.handle("", { name: "tab", shift: true });
-  assert.equal(picker.tab, "block");
+  assert.equal(picker.tab, "skill");
   picker.handle("s");
   picker.handle("", { name: "left" });
-  assert.equal(picker.tab, "skill");
+  assert.equal(picker.tab, "block");
 });
 
 test("wide characters and emoji fit the frame and delete as whole graphemes", () => {
@@ -315,7 +322,7 @@ test("wide characters and emoji fit the frame and delete as whole graphemes", ()
   for (const [columns, rows] of [[40, 16], [60, 20], [80, 24], [120, 40]]) {
     const frame = pickerFrame(picker, { columns, rows }).map(stripVTControlCharacters);
     assert.ok(frame.every((line) => displayWidth(line) <= columns - 2), `${columns}x${rows}`);
-    assert.ok(frame.filter((line) => line.startsWith("│")).every((line) => line.endsWith("│")));
+    assert.ok(frame.length < rows, `${columns}x${rows}`);
   }
   picker.handle("/");
   for (const text of ["e\u0301", "👍🏽", "漢"]) picker.handle(text);
@@ -358,6 +365,74 @@ test("a terminal too small for the picker ignores everything except cancel", () 
   assert.equal(picker.handle("", { name: "escape" }), "cancel");
   pickerFrame(picker, { columns: 80, rows: 24 });
   assert.equal(picker.handle("", { name: "return" }), "submit");
+});
+
+test("the picker shows the exact text a block adds and where each agent reads a skill", () => {
+  const picker = new Picker(components);
+  const frame = pickerFrame(picker, { columns: 120, rows: 40, adapters: ["claude", "codex"] }).map(stripVTControlCharacters).join("\n");
+  assert.match(frame, /Adds to \.agents\/rules\.md\s*\n.*│ ## Test-driven development/);
+  assert.match(frame, /\.agents\/rules\.md\s+this block, between agent-suitup markers/);
+  assert.match(frame, /AGENTS\.md\s+one link line, shared by all blocks/);
+  picker.handle("3");
+  picker.handle("", { name: "down" });
+  picker.handle("", { name: "down" });
+  const skill = pickerFrame(picker, { columns: 120, rows: 40, adapters: ["claude", "codex"] }).map(stripVTControlCharacters).join("\n");
+  assert.match(skill, /\.agents\/skills\/review-pr\/\s+Codex reads it here/);
+  assert.match(skill, /\.claude\/skills\/review-pr\s+Claude Code reads it here \((link|copy)\)/);
+  assert.match(skill, /SKILL\.md\s*\n.*│ ---\n.*│ name: review-pr/);
+  picker.handle("4");
+  const command = pickerFrame(picker, { columns: 120, rows: 40, adapters: ["grok"] }).map(stripVTControlCharacters).join("\n");
+  assert.match(command, /Skill commands  run with \/name/);
+  assert.match(command, /Skill command · runs when you invoke it/);
+  assert.match(command, /Run it\s+\/verify-work in Grok Build\. The agent never starts it/);
+  assert.match(command, /\.agents\/skills\/verify-work\/\s+source files/, "Grok runs commands through its wrapper");
+  assert.match(command, /\.grok\/skills\/verify-work\/SKILL\.md\s+Grok Build · \/verify-work only/);
+});
+
+test("the agent screen starts with every agent, keeps existing ones, and needs at least one", () => {
+  const picker = new AgentPicker({ detected: new Set(["codex"]) });
+  const frame = () => agentFrame(picker, { columns: 80, rows: 24 }).map(stripVTControlCharacters).join("\n");
+  assert.match(frame(), /Which coding agents do you use\?/);
+  assert.deepEqual(picker.selection, ["claude", "codex", "grok"], "all agents are selected by default");
+  assert.match(frame(), /● Claude Code\s+skills in \.claude\/skills \(linked\) · \/skill-name/);
+  assert.match(frame(), /● Codex\s+skills in \.agents\/skills · \$skill-name\s+detected/);
+  picker.handle(" ", { name: "space" });
+  picker.handle("2");
+  picker.handle("3");
+  assert.deepEqual(picker.selection, []);
+  assert.equal(picker.handle("", { name: "return" }), undefined, "Enter needs a choice");
+  assert.match(frame(), /Choose at least one agent/);
+  picker.handle("1");
+  picker.handle("3");
+  assert.deepEqual(picker.selection, ["claude", "grok"]);
+  picker.handle("3");
+  assert.deepEqual(picker.selection, ["claude"]);
+  picker.handle(undefined, { name: "paste-start" });
+  picker.handle("2", { name: "2" });
+  picker.handle(undefined, { name: "paste-end" });
+  assert.deepEqual(picker.selection, ["claude"], "pasted text never toggles agents");
+  assert.equal(picker.handle("", { name: "return" }), "submit");
+  assert.equal(picker.handle("", { name: "escape" }), "cancel");
+
+  const existing = new AgentPicker({ enabled: ["grok"], selected: [] });
+  existing.handle("3");
+  assert.deepEqual(existing.selection, ["grok"], "setup never drops an agent");
+  assert.match(agentFrame(existing, { columns: 80, rows: 24 }).map(stripVTControlCharacters).join("\n"), /✓ Grok Build.*set up/);
+  for (const [columns, rows] of [[40, 16], [60, 20], [120, 40]]) {
+    const lines = agentFrame(picker, { columns, rows }).map(stripVTControlCharacters);
+    assert.ok(lines.length < rows && lines.every((line) => displayWidth(line) <= columns - 2), `${columns}x${rows}`);
+  }
+});
+
+test("the agent screen restores the terminal and returns the chosen agents", async () => {
+  const { input, output, transcript } = fakeTerminal();
+  const result = pickAgents({ input, output, enabled: ["codex"] });
+  input.write("1");
+  input.write("\r");
+  assert.deepEqual(await result, ["codex", "grok"]);
+  assert.equal(input.isRaw, false);
+  assert.equal(input.listenerCount("keypress"), 0);
+  assert.ok(transcript().endsWith("\x1b[?2004l\x1b[?25h\x1b[?1049l"));
 });
 
 function fakeTerminal() {

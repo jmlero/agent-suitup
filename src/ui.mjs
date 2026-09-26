@@ -1,26 +1,27 @@
+import { agentNames, agents } from "./agents.mjs";
 import { aggregateContextCost, componentContextCost, requireComponent } from "./catalog.mjs";
-import { componentGuide } from "./component-guide.mjs";
+import { componentGuide, invocations } from "./component-guide.mjs";
 
 const sections = [
   {
     kind: "block",
-    title: "Instruction blocks",
-    description: "Always-on guidance inside owned AGENTS.md markers; existing text is preserved",
+    title: "Blocks",
+    description: "Always-on rules in .agents/rules.md, linked from AGENTS.md; your own text is preserved",
   },
   {
     kind: "skill",
     title: "Skills",
-    description: "On-demand expertise with optional references and resources",
+    description: "Workflows the agent loads when a task needs them",
   },
   {
     kind: "command",
-    title: "Commands",
-    description: "Explicit skills invoked as $name in Codex or /name in Grok and Claude",
+    title: "Skill commands",
+    description: "Skills that run only when you invoke them: /name in Claude Code and Grok Build, $name in Codex",
   },
   {
     kind: "plugin",
-    title: "Agent integrations",
-    description: "Vendor-native plugins, language servers, and marketplaces",
+    title: "Integrations",
+    description: "Claude Code plugins; their prerequisites are set up separately",
   },
 ];
 
@@ -33,6 +34,8 @@ const sectionAliases = new Map([
   ["skills", "skill"],
   ["command", "command"],
   ["commands", "command"],
+  ["skill-command", "command"],
+  ["skill-commands", "command"],
   ["plugin", "plugin"],
   ["plugins", "plugin"],
   ["integration", "plugin"],
@@ -58,22 +61,29 @@ export function orderedComponents(components) {
     .map(({ component }) => component);
 }
 
-export function formatBanner(subtitle = "Curate the agent layer for this repository.") {
-  const title = `${paint("1;36", "AGENT")} ${paint("2", "/")} ${paint("1;35", "SUITUP")}`;
-  return [
-    "",
-    `${paint("36", "╭─")} ${title}`,
-    `${paint("36", "│")}  ${paint("2", subtitle)}`,
-    paint("36", "╰────────────────────────────────────────────────────────"),
-  ].join("\n");
+export function formatBanner(subtitle = "Set up rules, skills, and skill commands for your coding agents.") {
+  return `\n${paint("1", "agent-suitup")}  ${paint("2", subtitle)}\n`;
 }
 
-export function formatProjectScan({ cwd, stack, catalogSize, suggestedCount, installedCount = 0 }) {
-  return formatStage("Project scan", [
+export function formatProjectScan({ cwd, stack, agents: detected = [], catalogSize, suggestedCount, installedCount = 0 }) {
+  return formatStage("Project", [
     paint("2", cwd),
-    `Stack      ${stack.length ? stack.join(paint("2", " · ")) : paint("2", "No specific stack detected")}`,
-    `Catalog    ${catalogSize} curated components · ${suggestedCount} suggested${installedCount ? ` · ${installedCount} installed` : ""}`,
+    `Stack    ${stack.length ? stack.join(paint("2", " · ")) : paint("2", "No specific stack detected")}`,
+    `Agents   ${detected.length ? `${detected.join(", ")} ${paint("2", "detected")}` : paint("2", "None detected")}`,
+    `Catalog  ${catalogSize} items · ${suggestedCount} suggested${installedCount ? ` · ${installedCount} installed` : ""}`,
   ]);
+}
+
+export function formatAgentChoices(detected = new Set(), enabled = []) {
+  const width = Math.max(...agents.map(({ name }) => name.length)) + 2;
+  return [
+    paint("1", "Which coding agents do you use?"),
+    paint("2", "Every agent reads AGENTS.md. Skills and skill commands are installed where each agent looks for them."),
+    ...agents.map((agent, index) => {
+      const tag = enabled.includes(agent.id) ? "set up, kept" : detected.has(agent.id) ? "detected" : "";
+      return `  ${index + 1}  ${agent.name.padEnd(width)}${paint("2", agent.setup)}${tag ? `  ${paint("32", tag)}` : ""}`;
+    }),
+  ].join("\n");
 }
 
 export function formatCatalog(components, {
@@ -111,46 +121,54 @@ export function formatCatalog(components, {
 export function formatSelection(components) {
   const lines = [];
   for (const section of sections) {
-    const ids = components.filter((component) => component.kind === section.kind).map(({ id }) => id);
-    if (ids.length) lines.push(`${section.title.padEnd(20)} ${ids.join(", ")}`);
+    const names = components.filter((component) => component.kind === section.kind).map(({ name }) => name);
+    if (names.length) lines.push(`${section.title.padEnd(15)} ${names.join(", ")}`);
   }
   const context = aggregateContextCost(components);
   if (context.words) {
-    lines.push(`Always-loaded text   ${context.words} words · ~${context.estimatedTokens} tokens`);
+    lines.push(`${"Always on".padEnd(15)} ${context.words} words · ~${context.estimatedTokens} tokens per session`);
   }
-  return formatStage("Selected components", lines.length ? lines : [paint("2", "None")]);
+  return formatStage("Selected", lines.length ? lines : [paint("2", "None")]);
 }
 
 export function formatComponentGuide(component, options = {}) {
   const guide = componentGuide(component, options);
+  const width = Math.max(40, Math.min(100, process.stdout.columns ?? 80));
   const flags = [
     options.scope === "user" && component.scopes.includes("user") ? "--scope user" : "",
-    options.adapters?.length ? `--adapter ${options.adapters.join(",")}` : "",
+    options.adapters?.length ? `--agent ${options.adapters.join(",")}` : "",
   ].filter(Boolean).join(" ");
+  const labelWidth = Math.max(...guide.facts.map(([label]) => label.length)) + 2;
+  const pathWidth = Math.max(...guide.files.map(([file]) => file.length)) + 2;
   return [
-    `${paint("1;36", component.name)} · ${guide.kind.name}\n${paint("2", component.id)}`,
-    ...guide.sections.map(([title, text]) => formatStage(title, [text])),
-    `Install  agent-suitup add ${component.id}${flags ? ` ${flags}` : ""}`,
+    [paint("1", guide.name), paint("2", `${component.id} · ${guide.meta}`)].join("\n"),
+    wrapText(guide.summary, width).join("\n"),
+    guide.facts.flatMap(([label, text]) => wrapText(text, width - labelWidth - 2)
+      .map((line, index) => `  ${index ? " ".repeat(labelWidth) : paint("2", label.padEnd(labelWidth))}${line}`)).join("\n"),
+    [paint("1", "Files"), ...guide.files.map(([file, note]) => `  ${file.padEnd(pathWidth)}${paint("2", note)}`)].join("\n"),
+    [paint("1", guide.content.title), ...guide.content.text.replace(/\n+$/, "").split("\n").map((line) => `  ${paint("2", "│")} ${line}`)].join("\n"),
+    `${paint("2", "Install")}  agent-suitup add ${component.id}${flags ? ` ${flags}` : ""}`,
   ].join("\n\n");
 }
 
 export function formatSetupStep(step) {
-  return ["Explore", "Connect", "Review"].map((label, index) =>
-    paint(index + 1 === step ? "1;36" : "2", `${index + 1 < step ? "✓" : `0${index + 1}`} ${label}`)).join(paint("2", "  →  "));
+  return ["Agents", "Choose", "Review"].map((label, index) => index + 1 < step ? paint("2", `✓ ${label}`)
+    : index + 1 === step ? paint("1;36", `${index + 1} ${label}`) : paint("2", `${index + 1} ${label}`)).join(paint("2", "  ›  "));
 }
 
 export function formatInstallReview(planner, manifest, components) {
   const scopes = new Map(manifest.components.map(({ id, scope }) => [id, scope]));
   const context = aggregateContextCost(manifest.components.map(({ id }) => requireComponent(id)));
-  return [
-    formatStage("Ready to install", components.filter(({ id }) => scopes.has(id)).map((component) =>
-      `${component.name} · ${scopes.get(component.id) === "user" ? "user (all projects)" : "this project"}`)),
-    formatStage("Your setup", [
-      `Adapters  ${manifest.adapters.length ? manifest.adapters.join(", ") : "canonical files only"}`,
-      `Always loaded  ${context.words} words · ~${context.estimatedTokens} tokens total`,
-    ]),
-    formatChanges(planner),
-  ].filter(Boolean).join("\n\n");
+  const chosen = components.filter(({ id }) => scopes.has(id));
+  const lines = [`${"Agents".padEnd(15)} ${manifest.adapters.length ? agentNames(manifest.adapters).join(", ") : "none (portable files only)"}`];
+  for (const section of sections) {
+    const items = chosen.filter((component) => component.kind === section.kind);
+    if (!items.length) continue;
+    lines.push(`${section.title.padEnd(15)} ${items.map((component) => component.kind === "block" || scopes.get(component.id) === "project"
+      ? component.name : `${component.name} ${paint("2", "(user, all projects)")}`).join(", ")}`);
+  }
+  if (context.words) lines.push(`${"Always on".padEnd(15)} ${context.words} words · ~${context.estimatedTokens} tokens per session`);
+  return [formatStage("Ready to install", lines), formatChanges(planner)].filter(Boolean).join("\n\n");
 }
 
 export function formatProgress(message) {
@@ -158,7 +176,7 @@ export function formatProgress(message) {
 }
 
 export function formatApplySummary(planner, {
-  components = [], action = "Applied", reviewed = false, suggestMore = false,
+  components = [], action = "Applied", reviewed = false, suggestMore = false, adapters = [],
 } = {}) {
   const operations = planner.operations();
   if (!operations.length && !planner.notes.length) return "No file changes.";
@@ -176,14 +194,11 @@ export function formatApplySummary(planner, {
   const commands = components.filter(({ kind }) => kind === "command");
   const skills = components.filter(({ kind }) => kind === "skill");
   if (skills.length && !/removed/i.test(action)) {
-    footer.push(`   ${paint("2", "Use")}   Ask your agent: Use ${skills[0].id.slice("skill/".length)} for this task.`);
-    footer.push(`         Skills load on demand from .agents/skills in the chosen project or user scope.`);
+    footer.push(`   ${paint("2", "Use")}   Ask your agent: "Use ${skills[0].id.slice("skill/".length)} for this task."`);
   }
   if (commands.length && !/removed/i.test(action)) {
-    footer.push(`   ${paint("2", "Try")}   ${commands.map(({ id }) => {
-      const name = id.slice("command/".length);
-      return `$${name} · /${name}`;
-    }).join("  ")}`);
+    const chosen = adapters.length ? adapters : undefined;
+    for (const { id } of commands) footer.push(`   ${paint("2", "Run")}   ${invocations(id.slice("command/".length), chosen)}`);
   }
   output.push(footer.join("\n"));
   return output.join("\n\n");
@@ -195,17 +210,20 @@ function formatChanges(planner) {
   const removes = operations.filter(({ after }) => after.kind === "missing");
   const updates = operations.filter(({ before, after }) => before.kind !== "missing" && after.kind !== "missing");
   const sections = [];
-  if (operations.length) sections.push(formatStage("Change set", [
-    `${paint("32", `+${creates.length}`)} create  ${paint("33", `~${updates.length}`)} update  ${paint("31", `-${removes.length}`)} remove`,
+  if (operations.length) sections.push(formatStage("Files", [
+    `${paint("32", `+${creates.length}`)} new  ${paint("33", `~${updates.length}`)} changed  ${paint("31", `-${removes.length}`)} removed`,
     ...operationPreview(operations),
   ]));
-  if (planner.notes.length) sections.push(formatStage("Manual steps (not executed)", planner.notes));
+  if (planner.notes.length) sections.push(formatNotes(planner.notes));
   return sections.join("\n\n");
 }
 
-export function formatHealthy(componentCount, hasManualSteps = false) {
-  const detail = hasManualSteps ? " · manual tools are recorded but not asserted" : "";
-  return `${paint("32", "◆")} ${paint("1;32", "Healthy")} · ${componentCount} component${componentCount === 1 ? " matches" : "s match"} the manifest and lockfile${detail}.`;
+export function formatNotes(notes) {
+  return formatStage("Manual steps (not executed)", notes);
+}
+
+export function formatHealthy(componentCount) {
+  return `${paint("32", "◆")} ${paint("1;32", "Healthy")} · ${componentCount} component${componentCount === 1 ? " matches" : "s match"} the manifest and lockfile.`;
 }
 
 export function formatDryRunFooter() {
@@ -231,13 +249,13 @@ function formatStage(title, lines) {
 
 function componentMetadata(component, recommendation) {
   const parts = [];
-  parts.push(component.adapters?.length ? component.adapters.map(capitalize).join("/") : "portable");
+  if (component.adapters?.length) parts.push(`${agentNames(component.adapters).join(", ")} only`);
   parts.push(component.scopes.join("/"));
   if (component.context) {
     const loading = {
-      always: "always loaded",
-      "on-demand": "on demand",
-      explicit: "explicit",
+      always: "always on",
+      "on-demand": "loads when relevant",
+      explicit: "runs when invoked",
       none: "no prompt context",
     }[component.context.loading] ?? component.context.loading;
     parts.push(loading);
@@ -251,19 +269,29 @@ function componentMetadata(component, recommendation) {
   return parts.join(" · ");
 }
 
+// Lists changed files, noting what AGENTS.md receives since users own the rest of it.
 function operationPreview(operations) {
-  const limit = 10;
+  const limit = 12;
   const lines = operations.slice(0, limit).map(({ before, after, label }) => {
+    const linked = (state) => typeof state.content === "string" && state.content.includes("<!--as:rules-->");
+    const note = label === "./AGENTS.md" && linked(after) && !linked(before) ? paint("2", "  adds a one-line link to .agents/rules.md") : "";
     if (after.kind === "missing") return `${paint("31", "−")} ${label}`;
-    if (before.kind === "missing") return `${paint("32", "+")} ${label}`;
-    return `${paint("33", "~")} ${label}`;
+    if (after.kind === "symlink") return `${paint(before.kind === "missing" ? "32" : "33", before.kind === "missing" ? "+" : "~")} ${label} ${paint("2", `→ ${after.target}`)}`;
+    if (before.kind === "missing") return `${paint("32", "+")} ${label}${note}`;
+    return `${paint("33", "~")} ${label}${note}`;
   });
   if (operations.length > limit) lines.push(paint("2", `… ${operations.length - limit} more files`));
   return lines;
 }
 
-function capitalize(value) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
+function wrapText(value, width) {
+  const lines = [""];
+  for (const word of value.split(/\s+/)) {
+    const last = lines.length - 1;
+    if (lines[last] && `${lines[last]} ${word}`.length > width) lines.push(word);
+    else lines[last] += `${lines[last] ? " " : ""}${word}`;
+  }
+  return lines;
 }
 
 export function paint(code, value) {

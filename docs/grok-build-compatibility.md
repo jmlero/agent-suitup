@@ -1,6 +1,8 @@
 # Grok Build compatibility
 
-Status: verified against Grok Build 1.0.4 on 2026-08-15.
+Status: verified against Grok Build 1.0.4 on 2026-08-15. Documentation and
+source reviewed against Grok Build 1.0.41 on 2026-09-26 for the rules file and
+skill folders; the rules link has not yet been exercised in a live Grok session.
 
 ## Result
 
@@ -10,9 +12,9 @@ remain vendor-specific.
 
 | Surface | agent-suitup behavior | Status |
 |---|---|---|
-| Instructions | Both discover repository `AGENTS.md` from root to working directory. | Native |
-| Skills | Both discover `.agents/skills/<name>/SKILL.md`. | Native |
-| Commands | The canonical skill works in both. `--adapter grok` adds a metadata-only wrapper that enforces slash-only invocation without copying the workflow. Invoke `$name` in Codex or `/name` in Grok. | Supported |
+| Instructions | Both discover repository `AGENTS.md` from root to working directory. Neither expands `@` imports, so blocks in `.agents/rules.md` load when the model follows the managed line in `AGENTS.md`. | Native entry point; linked rules depend on the model |
+| Skills | Both discover `.agents/skills/<name>/SKILL.md`. Grok also scans `.grok/skills` and `.claude/skills`; the first folder found for a name wins, in that order, and symlinked folders are loaded once. | Native |
+| Skill commands | The canonical skill works in both. `--adapter grok` adds a metadata-only wrapper that enforces slash-only invocation without copying the workflow. Invoke `$name` in Codex or `/name` in Grok. | Supported |
 | Plugins | Current `plugin/*` entries install through the Claude adapter. Grok and Codex use different native packaging and trust flows. | Not ported |
 | Config and MCP | `.codex/config.toml` is not imported by Grok; Grok uses `.grok/config.toml`. | No automatic translation |
 | Agents and subagents | No portable component is currently shipped, and native definitions differ. | Not supported |

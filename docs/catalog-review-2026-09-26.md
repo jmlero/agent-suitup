@@ -22,3 +22,21 @@ Apache-2.0. Aggregate always-loaded block text grows from 411 to 456 words
 conflicts and gaps between blocks rather than adding new obligations. As in
 earlier reviews, these are editorial decisions, not measured behavioral
 improvements.
+
+## Delivery change: blocks move to `.agents/rules.md`
+
+Blocks are no longer embedded in `AGENTS.md`. They are written to
+`.agents/rules.md`, and `AGENTS.md` carries one managed line:
+`Project rules: read and follow @.agents/rules.md before starting any task.`
+Block text is unchanged. The descriptions of `block/tdd` (version `1.1.1`) and
+`block/ponytail` (version `1.0.2`) no longer say they live in `AGENTS.md`.
+
+Smoke checks on 2026-09-26, not paired evaluations:
+
+- Claude Code 2.1.283 (Haiku, file tools disabled) quoted the TDD block from
+  context, so the `@` import loaded it at session start. It also listed the
+  linked `review-pr` skill and hid the slash-only `verify-work` command.
+- Codex CLI 0.157.1 (default model, read-only sandbox) opened `.agents/rules.md`
+  unprompted before planning an unrelated task, and planned test-first.
+- Grok Build was not exercised: its project instructions and skills require a
+  trusted folder. Its documentation and source show no import expansion.

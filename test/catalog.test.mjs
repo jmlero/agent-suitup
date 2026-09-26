@@ -100,16 +100,25 @@ test("selection guides explain every component and browsing never fetches remote
   for (const component of listComponents()) {
     for (const field of ["when", "consider", "example"]) assert.ok(component.selection[field].length > 20, component.id);
     const guide = componentGuide(component, { scope: "user", adapters: ["claude"] });
-    if (component.kind === "block") assert.equal(guide.destination, "./AGENTS.md");
-    else assert.ok(guide.destination.startsWith("~/"));
+    const files = guide.files.map(([file]) => file);
+    assert.ok(guide.content.text.trim(), `${component.id} shows what it adds`);
+    if (component.kind === "block") {
+      assert.deepEqual(files, [".agents/rules.md", "AGENTS.md"]);
+      assert.equal(guide.content.title, "Adds to .agents/rules.md");
+      assert.ok(guide.content.text.startsWith("## "), "blocks show their exact installed text");
+    } else assert.ok(files.every((file) => file.startsWith("~/")), component.id);
     if (component.kind === "plugin") {
-      assert.equal(guide.destination, "~/.claude/settings.json (enabledPlugins and extraKnownMarketplaces)");
-      assert.equal(componentGuide(component).destination,
-        "./.claude/settings.json (enabledPlugins and extraKnownMarketplaces)");
+      assert.deepEqual(files, ["~/.claude/settings.json"]);
+      assert.deepEqual(componentGuide(component).files.map(([file]) => file), [".claude/settings.json"]);
+      assert.match(guide.content.text, new RegExp(`"${component.adapter.claude.pluginId}@`));
     }
     if (component.kind === "skill") {
-      assert.match(guide.sections.find(([title]) => title === "Loading")[1], /On demand/);
-      assert.match(guide.sections.find(([title]) => title === "Agent setup")[1], /~\/\.claude\/skills/);
+      assert.match(guide.meta, /loads when relevant/);
+      assert.deepEqual(files, [`~/.agents/skills/${component.id.slice(6)}/`, `~/.claude/skills/${component.id.slice(6)}`]);
+    }
+    if (component.kind === "command") {
+      assert.deepEqual(componentGuide(component, { adapters: ["claude", "codex", "grok"] }).files.map(([, note]) => note.split(" ")[0]),
+        ["Codex", "Claude", "Grok"]);
     }
     assert.throws(() => validateCatalogComponent({ ...component, selection: { ...component.selection, example: "" } }), /selection guide must declare example/);
   }
