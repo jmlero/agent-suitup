@@ -259,7 +259,6 @@ test("interactive init installs a plugin directly from the unified catalog", asy
   const initialized = await runInteractive(fixture, [
     [/Your agents/, "1"],
     [/Select numbers or ranges/, "plugin/frontend-design"],
-    [/Install them for/, "project"],
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
@@ -281,7 +280,7 @@ test("init installs skills into each chosen agent's folder", (context) => {
     const result = spawnSync(process.execPath, [cli, "init", "--interactive"], {
       cwd: fixture.project,
       env: { ...process.env, HOME: fixture.home, USERPROFILE: fixture.home, NO_COLOR: "1" },
-      encoding: "utf8", input: `${agent}\ni skill/review-pr\nskill/review-pr\n${scope}\ny\n`, timeout: 5_000,
+      encoding: "utf8", input: `${agent}\ni skill/review-pr\n${scope === "user" ? "u\n" : ""}skill/review-pr\ny\n`, timeout: 5_000,
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Use when[\s\S]*Example[\s\S]*Consider[\s\S]*Files[\s\S]*SKILL\.md\n[\s\S]*│ name: review-pr/);
@@ -424,7 +423,8 @@ test("interactive review previews exact changes and can cancel without writing",
     [/Install this selection/, "n"],
   ], "init", "--interactive", "--plain");
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Ready to install[\s\S]*Blocks\s+Completion evidence/);
+  assert.match(result.stdout, /Ready to install\n│ Agents\s+Codex\n│ Install for\s+this project\n│\n│ Blocks \(1\)\s+Completion evidence/);
+  assert.match(result.stdout, /Files\s+3 new · 1 changed\n│   \+ \.agents\/rules\.md\n│   ~ AGENTS\.md  adds a one-line link[\s\S]*\+ \.agent-suitup\/lock\.json  agent-suitup state/);
   assert.match(result.stdout, /CREATE \.\/\.agents\/rules\.md\n\+<!--as:block\/completion-evidence-->\n\+## Completion evidence/);
   assert.match(result.stdout, /UPDATE \.\/AGENTS\.md\n[^+]*\+<!--as:rules-->\n\+Project rules: read and follow @\.agents\/rules\.md/);
   assert.match(result.stdout, /Installation cancelled. No files written/);
@@ -437,16 +437,16 @@ test("interactive add recovers from typos and installs the chosen user scope", a
   const result = await runInteractive(fixture, [
     [/Your agents/, "codex"],
     [/Select numbers or ranges/, "1-999999999999"],
+    [/Select numbers or ranges/, "u"],
     [/Select numbers or ranges/, "command/verify-work"],
-    [/Install them for/, "usr"],
-    [/Install them for/, "user"],
     [/Install this selection/, "maybe"],
     [/Install this selection/, "y"],
   ], "add", "--interactive");
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Invalid selection/);
-  assert.match(result.stdout, /Invalid scope/);
-  assert.match(result.stdout, /Skill commands\s+Verify work \(user, all projects\)/);
+  assert.match(result.stdout, /Install for: this project\. Type u[\s\S]*Install for: all projects, in your home folder/);
+  assert.doesNotMatch(result.stdout, /Install them for/);
+  assert.match(result.stdout, /Install for\s+all projects, in your home folder\n[\s\S]*Skill commands \(1\)\s+Verify work\n/);
   assert.match(read(fixture.home, ".agents/skills/verify-work/SKILL.md"), /# Verify Work/);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.components, [{ id: "command/verify-work", scope: "user" }]);
@@ -457,7 +457,6 @@ test("pressing Enter at the agent question sets up every agent", async (context)
   const result = await runInteractive(fixture, [
     [/Your agents \(all, or numbers or names, e\.g\. 1,3\) \[all\]/, ""],
     [/Select numbers or ranges/, "command/verify-work"],
-    [/Install them for/, ""],
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(result.status, 0, result.stderr);
@@ -476,7 +475,6 @@ test("interactive init recovers from an invalid agent choice", async (context) =
     [/Your agents/, "cloude"],
     [/Your agents/, "claude"],
     [/Select numbers or ranges/, "skill/review-pr"],
-    [/Install them for/, "project"],
     [/Install this selection/, "n"],
   ], "init", "--interactive");
   assert.equal(result.status, 0, result.stderr);
@@ -1140,10 +1138,10 @@ test("an interactive scope choice takes precedence over a plugin recommendation"
   const result = spawnSync(process.execPath, [cli, "init", "--interactive"], {
     cwd: fixture.project,
     env: { ...process.env, HOME: fixture.home, USERPROFILE: fixture.home, PATH: executableDirectory },
-    encoding: "utf8", input: "claude\nplugin/typescript-lsp\nproject\ny\n", timeout: 5_000,
+    encoding: "utf8", input: "claude\nplugin/typescript-lsp\ny\n", timeout: 5_000,
   });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Integrations\s+TypeScript LSP\n/);
+  assert.match(result.stdout, /Install for\s+this project\n[\s\S]*Integrations \(1\)\s+TypeScript LSP\n/);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).components,
     [{ id: "plugin/typescript-lsp", scope: "project" }]);
   assert.equal(JSON.parse(read(fixture.project, ".claude/settings.json"))

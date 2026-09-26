@@ -32,10 +32,12 @@ import {
   formatHealthy,
   formatInstallReview,
   formatAgentChoices,
+  formatApprovalPrompt,
   formatListHeader,
   formatNotes,
   formatProgress,
   formatProjectScan,
+  formatScopeChoice,
   formatSelection,
   formatSetupStep,
   orderedComponents,
@@ -108,8 +110,8 @@ async function initialize({ cwd, home, flags }) {
   try {
     const adapters = await chooseAgents(prompt, flags, existing, detectedAgents);
     console.log(`\n${formatSetupStep(2)}`);
-    const selectedIds = await chooseComponents(prompt, catalog.filter((component) => availableWithAdapters(component, adapters)),
-      detected, installedIds, {
+    const { ids: selectedIds, scope } = await chooseComponents(prompt,
+      catalog.filter((component) => availableWithAdapters(component, adapters)), detected, installedIds, {
         scope: flags.scope ?? "project", adapters,
         installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
       });
@@ -118,9 +120,6 @@ async function initialize({ cwd, home, flags }) {
       return;
     }
     const components = selectedIds.map((id) => requireComponent(id));
-    console.log(`\n${formatSelection(components)}`);
-    const scope = flags.scope ?? (components.some((component) => component.scopes.length > 1)
-      ? await chooseScope(prompt, "project") : "project");
     const byId = new Map((existing?.components ?? []).map((selection) => [selection.id, selection]));
     for (const component of components) {
       byId.set(component.id, { id: component.id, scope: componentScope(component, scope) });
@@ -142,7 +141,7 @@ async function add({ cwd, home, flags, values }) {
   const existing = readManifest(cwd);
   const detected = detectStack(cwd);
   let selectedIds = values;
-  let interactiveDefaultScope = null;
+  let interactiveScope = null;
   let interactiveAdapters = null;
   let prompt;
   maybeBanner("Add rules, skills, and skill commands for your coding agents.");
@@ -157,17 +156,13 @@ async function add({ cwd, home, flags, values }) {
       interactiveAdapters = await chooseAgents(prompt, flags, existing, detectAgents({ cwd }));
       console.log(`\n${formatSetupStep(2)}`);
       const candidates = listComponents().filter((component) => availableWithAdapters(component, interactiveAdapters));
-      selectedIds = await chooseComponents(prompt, candidates, detected, installedIds, {
+      ({ ids: selectedIds, scope: interactiveScope } = await chooseComponents(prompt, candidates, detected, installedIds, {
         scope: flags.scope ?? "project", adapters: interactiveAdapters,
         installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
-      });
+      }));
       if (!selectedIds.length) {
         console.log("No new components selected. Repository left unchanged.");
         return;
-      }
-      console.log(`\n${formatSelection(selectedIds.map(requireComponent))}`);
-      if (!flags.scope && selectedIds.some((id) => requireComponent(id).scopes.length > 1)) {
-        interactiveDefaultScope = await chooseScope(prompt, "project");
       }
       console.log(`\n${formatSetupStep(3)}`);
     }
@@ -180,7 +175,9 @@ async function add({ cwd, home, flags, values }) {
       const { id } = component;
       byId.set(id, {
         id,
-        scope: flags.scope ?? byId.get(id)?.scope ?? componentScope(component, interactiveDefaultScope),
+        // The picker starts from --scope, so its choice is the final one.
+        scope: interactiveScope ? componentScope(component, interactiveScope)
+          : flags.scope ?? byId.get(id)?.scope ?? componentScope(component, null),
       });
     }
     const manifest = normalizeManifest({
@@ -345,7 +342,7 @@ async function applyDesired({
   if (prompt) {
     console.log(`\n${formatInstallReview(result.planner, manifest, displayComponents)}\n`);
     while (true) {
-      const answer = (await prompt.question("Install this selection? [Y/n/p preview]: ")).trim().toLowerCase();
+      const answer = (await prompt.question(formatApprovalPrompt())).trim().toLowerCase();
       if (!answer || answer === "y" || answer === "yes") break;
       if (answer === "n" || answer === "no") {
         console.log("Installation cancelled. No files written.");
@@ -367,16 +364,6 @@ function componentScope(component, requested) {
     return component.recommendedScope;
   }
   return component.scopes[0];
-}
-
-async function chooseScope(prompt, fallback) {
-  console.log("\nSkills and skill commands can live in this project, or in your home folder for every project.");
-  while (true) {
-    const answer = await prompt.question(`Install them for: project or user [${fallback}]: `);
-    const scope = answer.trim().toLowerCase() || fallback;
-    if (new Set(["project", "user"]).has(scope)) return scope;
-    console.log(`Invalid scope: ${scope}. Use project or user.`);
-  }
 }
 
 // Setup only adds agents: existing ones stay, and remove --adapter drops one.
@@ -423,19 +410,27 @@ async function chooseComponents(prompt, components, detected, installedIds = new
   console.log(formatCatalog(ordered, { detected, installedIds, numbered: true, suggest: suggested }));
   console.log('\nUse numbers, ranges (1,3-5), component IDs, groups (blocks, skills, commands, integrations), all, or none. Enter skips.');
   console.log('Type i <number or ID> to read its full guide before choosing. Installed items are kept.');
+  let { scope } = options;
+  const scopable = ordered.some((component) => component.scopes.includes("user"));
+  if (scopable) console.log(formatScopeChoice(scope));
   while (true) {
     const answer = await prompt.question('Select numbers or ranges [none]: ');
     try {
+      if (scopable && answer.trim().toLowerCase() === "u") {
+        scope = scope === "user" ? "project" : "user";
+        console.log(formatScopeChoice(scope));
+        continue;
+      }
       const inspect = /^i\s+(.+)$/i.exec(answer.trim());
       if (inspect) {
         const ids = parseSelection(inspect[1], ordered);
         if (ids.length !== 1) { console.log("Inspect one component number or ID at a time."); continue; }
         console.log(`\n${formatComponentGuide(requireComponent(ids[0]), {
-          ...options, scope: options.installedScopes?.get(ids[0]) ?? options.scope,
+          ...options, scope: options.installedScopes?.get(ids[0]) ?? scope,
         })}\n`);
         continue;
       }
-      return parseSelection(answer, ordered).filter((id) => !installedIds.has(id));
+      return { ids: parseSelection(answer, ordered).filter((id) => !installedIds.has(id)), scope };
     } catch (error) {
       console.log(error.message);
     }

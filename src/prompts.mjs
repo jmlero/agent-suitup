@@ -111,7 +111,8 @@ export function pickComponents(components, {
   input = process.stdin, output = process.stdout, ...options
 } = {}) {
   const picker = new Picker(components, options);
-  return runScreen(picker, (size) => pickerFrame(picker, { ...options, ...size }), () => picker.selection.map(({ id }) => id), { input, output });
+  return runScreen(picker, (size) => pickerFrame(picker, { ...options, ...size }),
+    () => ({ ids: picker.selection.map(({ id }) => id), scope: picker.scope }), { input, output });
 }
 
 export function pickAgents({ input = process.stdin, output = process.stdout, ...options } = {}) {

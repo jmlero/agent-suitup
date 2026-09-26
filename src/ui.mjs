@@ -141,19 +141,58 @@ export function formatSetupStep(step) {
     : index + 1 === step ? paint("1;36", `${index + 1} ${label}`) : paint("2", `${index + 1} ${label}`)).join(paint("2", "  ›  "));
 }
 
+export function formatScopeChoice(scope) {
+  return scope === "user"
+    ? "Install for: all projects, in your home folder; blocks stay in this project. Type u to install in this project instead."
+    : "Install for: this project. Type u to install skills, skill commands, and integrations for all projects instead.";
+}
+
+// One review block: what is installed, for which agents and where, then every file it touches.
 export function formatInstallReview(planner, manifest, components) {
+  const width = Math.max(60, Math.min(100, process.stdout.columns ?? 80));
   const scopes = new Map(manifest.components.map(({ id, scope }) => [id, scope]));
   const context = aggregateContextCost(manifest.components.map(({ id }) => requireComponent(id)));
   const chosen = components.filter(({ id }) => scopes.has(id));
-  const lines = [`${"Agents".padEnd(15)} ${manifest.adapters.length ? agentNames(manifest.adapters).join(", ") : "none (portable files only)"}`];
+  const movable = chosen.filter((component) => component.scopes.length > 1);
+  const global = movable.filter(({ id }) => scopes.get(id) === "user");
+  const mixed = global.length > 0 && global.length < movable.length;
+  const local = chosen.filter(({ id }) => scopes.get(id) !== "user");
+  const rows = [
+    ["Agents", manifest.adapters.length ? agentNames(manifest.adapters).join(", ") : "none (portable files only)"],
+    ["Install for", !global.length || mixed ? "this project"
+      : `all projects, in your home folder${local.length
+        ? ` · ${[...new Set(local.map(({ kind }) => componentKinds[kind].plural.toLowerCase()))].join(", ")} stay in this project` : ""}`],
+    null,
+  ];
   for (const section of sections) {
     const items = chosen.filter((component) => component.kind === section.kind);
     if (!items.length) continue;
-    lines.push(`${section.title.padEnd(15)} ${items.map((component) => component.kind === "block" || scopes.get(component.id) === "project"
-      ? component.name : `${component.name} ${paint("2", "(user, all projects)")}`).join(", ")}`);
+    rows.push([`${section.title} (${items.length})`, items.map((component) =>
+      mixed && scopes.get(component.id) === "user" ? `${component.name} (all projects)` : component.name).join(", ")]);
   }
-  if (context.words) lines.push(`${"Always on".padEnd(15)} ${context.words} words · ~${context.estimatedTokens} tokens per session`);
-  return [formatStage("Ready to install", lines), formatChanges(planner)].filter(Boolean).join("\n\n");
+  if (context.words) rows.push(["Always on", `${context.words} words · ~${context.estimatedTokens} tokens per session`]);
+  const operations = planner.operations();
+  if (operations.length) rows.push(null, ["Files", fileCounts(operations)]);
+  const labelWidth = Math.max(...rows.filter(Boolean).map(([label]) => label.length)) + 2;
+  const lines = rows.flatMap((row) => row ? wrapText(row[1], width - labelWidth - 2)
+    .map((line, index) => `${index ? " ".repeat(labelWidth) : paint("2", row[0].padEnd(labelWidth))}${line}`) : [""]);
+  lines.push(...operationPreview(operations, { review: true }).map((line) => `  ${line}`));
+  return [formatStage("Ready to install", lines), planner.notes.length ? formatNotes(planner.notes) : ""]
+    .filter(Boolean).join("\n\n");
+}
+
+export function formatApprovalPrompt() {
+  return `${paint("1;36", "❯")} ${paint("1", "Install this selection?")} ${paint("2", "[Y/n · p preview]")} `;
+}
+
+function fileCounts(operations) {
+  const removed = operations.filter(({ after }) => after.kind === "missing").length;
+  const added = operations.filter(({ before, after }) => before.kind === "missing" && after.kind !== "missing").length;
+  return [
+    added ? paint("32", `${added} new`) : "",
+    operations.length - added - removed ? paint("33", `${operations.length - added - removed} changed`) : "",
+    removed ? paint("31", `${removed} removed`) : "",
+  ].filter(Boolean).join(paint("2", " · "));
 }
 
 export function formatProgress(message) {
@@ -227,7 +266,7 @@ export function sectionTitle(kind) {
 function formatStage(title, lines) {
   const output = [`${paint("35", "◇")} ${paint("1", title)}`];
   lines.forEach((line, index) => {
-    output.push(`${paint("2", index === lines.length - 1 ? "╰" : "│")} ${line}`);
+    output.push(`${paint("2", index === lines.length - 1 ? "╰" : "│")}${line ? ` ${line}` : ""}`);
   });
   return output.join("\n");
 }
@@ -255,11 +294,19 @@ function componentMetadata(component, recommendation) {
 }
 
 // Lists changed files, noting what AGENTS.md receives since users own the rest of it.
-function operationPreview(operations) {
+// The review lists agent-suitup's own state last and dimmed, without the ./ prefix.
+function operationPreview(operations, { review = false } = {}) {
   const limit = 12;
-  const lines = operations.slice(0, limit).map(({ before, after, label }) => {
+  const state = ({ label }) => label.startsWith("./.agent-suitup/");
+  const ordered = review ? [...operations.filter((operation) => !state(operation)), ...operations.filter(state)] : operations;
+  const lines = ordered.slice(0, limit).map((operation) => {
+    const { before, after } = operation;
+    const label = review ? operation.label.replace(/^\.\//, "") : operation.label;
     const linked = (state) => typeof state.content === "string" && state.content.includes("<!--as:rules-->");
-    const note = label === "./AGENTS.md" && linked(after) && !linked(before) ? paint("2", "  adds a one-line link to .agents/rules.md") : "";
+    const note = operation.label === "./AGENTS.md" && linked(after) && !linked(before) ? paint("2", "  adds a one-line link to .agents/rules.md") : "";
+    if (review && state(operation)) {
+      return paint("2", `${after.kind === "missing" ? "−" : before.kind === "missing" ? "+" : "~"} ${label}  agent-suitup state`);
+    }
     if (after.kind === "missing") return `${paint("31", "−")} ${label}`;
     if (after.kind === "symlink") return `${paint(before.kind === "missing" ? "32" : "33", before.kind === "missing" ? "+" : "~")} ${label} ${paint("2", `→ ${after.target}`)}`;
     if (before.kind === "missing") return `${paint("32", "+")} ${label}${note}`;

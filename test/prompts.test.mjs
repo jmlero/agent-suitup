@@ -261,7 +261,7 @@ test("raw picker restores terminal mode, cursor and listeners on submit, cancel 
     else if (finish === "cancel") input.write("\x03");
     else input.end();
     const selected = await checked;
-    if (finish === "submit") assert.deepEqual(selected, ["block/tdd"]);
+    if (finish === "submit") assert.deepEqual(selected, { ids: ["block/tdd"], scope: "project" });
     assert.equal(input.isRaw, false);
     assert.equal(input.isPaused(), true);
     assert.equal(input.listenerCount("keypress"), 0);
@@ -311,7 +311,7 @@ test("the picker leaves a fresh input stream paused with typed-ahead input intac
   assert.equal(input.readableFlowing, null);
   const result = pickComponents(blocks, { input, output });
   input.write("\r");
-  assert.deepEqual(await result, []);
+  assert.deepEqual(await result, { ids: [], scope: "project" });
   assert.equal(input.isPaused(), true);
   input.write("y\n");
   assert.equal(input.read().toString(), "y\n");
@@ -419,6 +419,38 @@ test("pasted text filters the catalog without triggering shortcuts or submitting
   input.write("\x03");
   await assert.rejects(result, PromptCancelled);
   assert.ok(transcript().includes("\x1b[?2004h"), "bracketed paste is enabled");
+});
+
+test("u switches new items between this project and all projects, and the details follow", async () => {
+  const picker = new Picker(components);
+  const frame = () => pickerFrame(picker, { columns: 120, rows: 40, adapters: ["claude", "codex"] })
+    .map(stripVTControlCharacters).join("\n");
+  assert.equal(picker.scope, "project");
+  assert.match(frame(), /Install for this project {2}u change/);
+  picker.handle("\t", { name: "tab" });
+  picker.handle("\t", { name: "tab" });
+  assert.equal(picker.focused.kind, "skill");
+  const name = picker.focused.id.slice("skill/".length);
+  assert.match(frame(), new RegExp(`\\n.*│   \\.agents/skills/${name}/`));
+  picker.handle("u");
+  assert.equal(picker.scope, "user");
+  assert.match(frame(), /Install for all projects {2}u change/);
+  assert.match(frame(), new RegExp(`│   ~/\\.agents/skills/${name}/\\s+Codex reads it here`));
+  picker.handle(undefined, { name: "up" });
+  assert.match(frame(), /Installs for all projects, in your home folder\. Press u to install in/);
+  picker.handle("u");
+  assert.equal(picker.scope, "project");
+
+  const blocksOnly = new Picker(blocks, { scope: "user" });
+  blocksOnly.handle("u");
+  assert.equal(blocksOnly.scope, "user", "u does nothing when no item can install for all projects");
+  assert.doesNotMatch(pickerFrame(blocksOnly, { columns: 120, rows: 40 }).map(stripVTControlCharacters).join("\n"), /Install for/);
+
+  const { input, output } = fakeTerminal();
+  const result = pickComponents(components, { input, output, scope: "user" });
+  input.write("u");
+  input.write("\r");
+  assert.deepEqual(await result, { ids: [], scope: "project" }, "the picker starts from --scope and returns the final choice");
 });
 
 test("a terminal too small for the picker ignores everything except cancel", () => {

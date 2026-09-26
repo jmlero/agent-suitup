@@ -28,9 +28,9 @@ Setup has three steps: **Agents → Choose → Review**. The first row, **All
 agents**, starts selected, so everything you install works with Claude Code,
 Codex, and Grok Build; press Enter to keep it, or deselect any agent you do not
 use. Agents found on your `PATH` or in the project are marked as detected. Then
-browse **Blocks, Skills, Skill commands, and Integrations** in one place, choose
-an installation scope, and review the files before installing. No catalog item
-is preselected. Skills can be installed on their own.
+browse **Blocks, Skills, Skill commands, and Integrations** in one place, and
+review the files before installing. No catalog item is preselected. Skills can
+be installed on their own.
 
 - **Tab**, **Shift+Tab**, **← / →**, or **1–5** switches categories. **↑ / ↓**
   browses, **Space** selects, and **Enter** continues. Each group heading is a
@@ -44,14 +44,20 @@ is preselected. Skills can be installed on their own.
   Scroll with arrows or Page Up / Page Down; Enter or Esc returns to the list.
 - **s** shows your selection. Totals update live; installed items are marked and
   kept in place. Wide terminals show two panels; smaller ones use a compact view.
-- At review, **p** shows exact changes, **Enter** installs, and **n** cancels.
+- New items install for **this project** by default. **u** switches skills,
+  skill commands, and integrations to **all projects** (your home folder) and
+  back; blocks always stay in the project. `--scope user` starts there instead.
+- The review lists your agents, where items install, each group, the always-on
+  cost, and every file that changes. **p** shows exact changes, **Enter**
+  installs, and **n** cancels.
 
 Use `init --plain` for numbered prompts, including with screen readers. This
 mode also activates for piped input, small terminals, and `TERM=dumb`. Enter
 at the agent question sets up all agents; otherwise choose by number or name
 (`1,2` or `claude,codex`). The catalog accepts numbers, ranges (`1,3-5`),
 component IDs, groups (`blocks`, `skills`, `commands`, `integrations`), `all`,
-or `none`, and lets you correct invalid answers. Type `i <number or ID>` to read an item's guide. Use
+or `none`, and lets you correct invalid answers. Type `i <number or ID>` to read
+an item's guide, or `u` to switch between this project and all projects. Use
 `--interactive` when piping answers and `NO_COLOR=1` to
 disable color. Ctrl+C cancels setup. Esc returns from a guide or selection view,
 clears a search, or quits the catalog when there is nothing to dismiss. Closing

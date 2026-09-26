@@ -8,7 +8,7 @@ const kindOrder = ["block", "skill", "command", "plugin"];
 const steps = ["Agents", "Choose", "Review"];
 
 export class Picker {
-  constructor(components, { installedIds = new Set(), installedScopes = new Map() } = {}) {
+  constructor(components, { installedIds = new Set(), installedScopes = new Map(), scope = "project" } = {}) {
     const rank = (component) => kindOrder.indexOf(component.kind);
     this.components = components.map((component, index) => ({ component, index }))
       .sort((left, right) => rank(left.component) - rank(right.component) || left.index - right.index)
@@ -18,6 +18,9 @@ export class Picker {
       .map((kind) => ({ id: kind, label: componentKinds[kind].plural }))];
     this.installedIds = installedIds;
     this.installedScopes = installedScopes;
+    // New items install for this project unless u switches them to all projects.
+    this.scope = scope;
+    this.scopable = this.components.some((component) => component.scopes.includes("user"));
     this.selected = new Set();
     this.cursor = 0;
     // True when the focus is on the heading of visible[cursor]'s group.
@@ -153,6 +156,7 @@ export class Picker {
     else if (key.name === "space" || text === " ") this.focusedGroup ? this.toggleGroup(this.focusedGroup) : this.toggle(this.focused);
     else if (text === "/") this.searching = true;
     else if (text === "i") this.inspected = this.focused ?? null;
+    else if (text === "u" && this.scopable) this.scope = this.scope === "user" ? "project" : "user";
     else if (text === "s") {
       if (this.tab !== "selected") this.returnTab = this.tab;
       this.tab = this.tab === "selected" ? "all" : "selected";
@@ -180,7 +184,7 @@ export class Picker {
 }
 
 export function pickerFrame(picker, {
-  columns = 80, rows = 24, suggest = () => ({ pick: false }), scope = "project", adapters = [],
+  columns = 80, rows = 24, suggest = () => ({ pick: false }), adapters = [],
 } = {}) {
   const width = Math.max(1, Math.min(132, columns - 2));
   picker.tooSmall = columns < 40 || rows < 16;
@@ -194,7 +198,7 @@ export function pickerFrame(picker, {
   const footer = [rule(width), ...footerLines(picker, width)];
   const height = Math.max(4, rows - 1 - header.length - footer.length);
   const guide = focused ? componentGuide(focused, {
-    scope: picker.installedScopes.get(focused.id) ?? scope, adapters, recommendation: suggest(focused),
+    scope: picker.installedScopes.get(focused.id) ?? picker.scope, adapters, recommendation: suggest(focused),
   }) : null;
   const details = (detailWidth, detailHeight) => picker.focusedGroup
     ? groupLines(picker, picker.focusedGroup, detailWidth, detailHeight)
@@ -339,7 +343,18 @@ function tabLines(picker, width) {
     line += `${line ? " " : ""}${segment}`;
   }
   if (line) lines.push(line);
+  if (picker.scopable) {
+    const where = `${paint("2", "Install for")} ${paint(picker.scope === "user" ? "1;33" : "1", scopeName(picker.scope))}  ${paint("1", "u")} ${paint("2", "change")}`;
+    const last = lines.length - 1;
+    if (length(lines[last]) + 3 + length(where) <= width) {
+      lines[last] += `${" ".repeat(width - length(lines[last]) - length(where))}${where}`;
+    } else lines.push(fit(where, width));
+  }
   return lines;
+}
+
+function scopeName(scope) {
+  return scope === "user" ? "all projects" : "this project";
 }
 
 function listLines(picker, width, height, suggest) {
@@ -402,6 +417,11 @@ function groupLines(picker, kind, width, height) {
       : selected === available.length ? `Space clears all ${available.length}.`
         : `Space selects all ${available.length}${picker.query ? " matching" : ""}; press it again to clear them.`, width),
   ];
+  if (members.some((component) => component.scopes.includes("user"))) {
+    lines.push("", ...wrap(picker.scope === "user"
+      ? "Installs for all projects, in your home folder. Press u to install in this project only."
+      : "Installs in this project. Press u to install for all projects, in your home folder.", width).map((line) => paint("2", line)));
+  }
   const cost = aggregateContextCost(available);
   if (kind === "block" && available.length && cost.words) {
     lines.push("", ...wrap(`All of them add ${cost.words} words (~${cost.estimatedTokens} tokens) to every session.`, width).map((line) => paint("2", line)));
