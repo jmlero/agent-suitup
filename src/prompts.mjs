@@ -1,6 +1,7 @@
 import readline from "node:readline";
 import { AgentPicker, Picker, agentFrame, pickerFrame } from "./dashboard.mjs";
 export { AgentPicker, Picker, agentFrame, pickerFrame } from "./dashboard.mjs";
+import { sectionAlias } from "./ui.mjs";
 
 const terminationSignals = process.platform === "win32" ? [] : ["SIGTERM", "SIGHUP"];
 
@@ -88,11 +89,17 @@ export function parseSelection(answer, components) {
   for (const token of value.split(/[\s,]+/).filter(Boolean)) {
     const component = components.find(({ id }) => id === token);
     if (component) { selected.add(component.id); continue; }
+    // A group name such as blocks or skills selects the whole group.
+    const kind = sectionAlias(token);
+    if (kind && components.some((item) => item.kind === kind)) {
+      for (const item of components) if (item.kind === kind) selected.add(item.id);
+      continue;
+    }
     const range = /^(\d+)(?:-(\d+))?$/.exec(token);
     const start = Number(range?.[1]);
     const end = Number(range?.[2] ?? range?.[1]);
     if (!range || start < 1 || end > components.length || start > end) {
-      throw new Error(`Invalid selection: ${token}. Use 1-${components.length}, component IDs, or none.`);
+      throw new Error(`Invalid selection: ${token}. Use 1-${components.length}, component IDs, a group such as blocks, or none.`);
     }
     for (let index = start; index <= end; index += 1) selected.add(components[index - 1].id);
   }

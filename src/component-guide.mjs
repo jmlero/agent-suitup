@@ -3,10 +3,22 @@ import { bundledContent, componentContextCost, readCatalogText } from "./catalog
 import { rulesFile } from "./reconcile.mjs";
 
 export const componentKinds = {
-  block: { name: "Block", plural: "Blocks", summary: "always-on rules", color: "33" },
-  skill: { name: "Skill", plural: "Skills", summary: "loaded when relevant", color: "36" },
-  command: { name: "Skill command", plural: "Skill commands", summary: "run with /name", color: "35" },
-  plugin: { name: "Integration", plural: "Integrations", summary: "Claude Code plugins", color: "34" },
+  block: {
+    name: "Block", plural: "Blocks", summary: "always-on rules", color: "33",
+    about: "Always-on rules in .agents/rules.md, linked from AGENTS.md; your own text is preserved",
+  },
+  skill: {
+    name: "Skill", plural: "Skills", summary: "loaded when relevant", color: "36",
+    about: "Workflows the agent loads when a task needs them",
+  },
+  command: {
+    name: "Skill command", plural: "Skill commands", summary: "run with /name", color: "35",
+    about: "Skills that run only when you invoke them: /name in Claude Code and Grok Build, $name in Codex",
+  },
+  plugin: {
+    name: "Integration", plural: "Integrations", summary: "Claude Code plugins", color: "34",
+    about: "Claude Code plugins; their prerequisites are set up separately",
+  },
 };
 
 // Catalog explanations are selection aids, never extra installed instructions.

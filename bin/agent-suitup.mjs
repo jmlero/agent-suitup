@@ -389,7 +389,7 @@ async function chooseAgents(prompt, flags, existing, detected) {
   else {
     console.log(formatAgentChoices(detected, current));
     while (!chosen) {
-      const answer = await prompt.question("Your agents (numbers or names, e.g. 1,3) [all]: ");
+      const answer = await prompt.question("Your agents (all, or numbers or names, e.g. 1,3) [all]: ");
       try {
         chosen = parseAgentChoice(answer);
       } catch (error) {
@@ -421,7 +421,7 @@ async function chooseComponents(prompt, components, detected, installedIds = new
   });
   console.log("\nChoose blocks, skills, skill commands, and integrations. No item is preselected.\n");
   console.log(formatCatalog(ordered, { detected, installedIds, numbered: true, suggest: suggested }));
-  console.log('\nUse numbers, ranges (1,3-5), component IDs, all, or none. Enter skips.');
+  console.log('\nUse numbers, ranges (1,3-5), component IDs, groups (blocks, skills, commands, integrations), all, or none. Enter skips.');
   console.log('Type i <number or ID> to read its full guide before choosing. Installed items are kept.');
   while (true) {
     const answer = await prompt.question('Select numbers or ranges [none]: ');

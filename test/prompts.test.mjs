@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { stripVTControlCharacters } from "node:util";
 import test from "node:test";
 import { listComponents } from "../src/catalog.mjs";
+import { componentKinds } from "../src/component-guide.mjs";
 import { displayWidth } from "../src/dashboard.mjs";
 import {
   AgentPicker, Picker, Prompts, PromptCancelled, agentFrame, parseSelection, pickAgents, pickComponents, pickerFrame,
@@ -21,6 +22,9 @@ test("text selection accepts IDs and bounded ranges without duplicate choices", 
   assert.deepEqual(parseSelection("", blocks), []);
   assert.deepEqual(parseSelection("none", blocks), []);
   assert.equal(parseSelection("all", blocks).length, blocks.length);
+  assert.deepEqual(parseSelection("Blocks", components), blocks.map(({ id }) => id), "a group name selects the whole group");
+  assert.deepEqual(parseSelection("skill-commands, 1", components), ["command/verify-work", "command/commit-work", "block/tdd"]);
+  assert.throws(() => parseSelection("skills", blocks), /a group such as blocks/, "a group with no items is not a valid choice");
   for (const answer of ["0", String(blocks.length + 1), "3-1", "1-99999999999999999999", "1.5", ",", "wat", "1-2-3"]) {
     assert.throws(() => parseSelection(answer, blocks), /selection|Choose/i);
   }
@@ -44,6 +48,68 @@ test("keyboard search preserves picks and toggles only visible results", () => {
   picker.handle(" ");
   assert.deepEqual(picker.selection.map(({ id }) => id), ["block/tdd", "block/ponytail"]);
   assert.equal(picker.handle("", { name: "return" }), "submit");
+});
+
+test("group headings are rows that select or clear their whole group", () => {
+  const picker = new Picker(components, { installedIds: new Set(["skill/audit-code"]) });
+  const frame = (size = { columns: 120, rows: 40 }) => pickerFrame(picker, size).map(stripVTControlCharacters).join("\n");
+  const kinds = (kind) => picker.selection.filter((component) => component.kind === kind).map(({ id }) => id);
+  const blockIds = blocks.map(({ id }) => id);
+  const skillIds = components.filter(({ kind, id }) => kind === "skill" && id !== "skill/audit-code").map(({ id }) => id);
+  assert.equal(picker.focused.id, "block/tdd", "the list starts on the first item, not its heading");
+  assert.match(frame(), /\n {2}○ Blocks {2}always-on rules[^\n]*\n❯ {3}○ Test-driven development/);
+  picker.handle("", { name: "up" });
+  assert.equal(picker.focusedGroup, "block");
+  assert.equal(picker.focused, undefined);
+  assert.match(frame(), /❯ ○ Blocks {2}always-on rules/);
+  assert.match(frame(), /8 blocks · 0 selected[\s\S]*Space selects all 8[\s\S]*All of them add 456 words \(~781 tokens\) to every session/);
+  picker.handle("", { name: "up" });
+  assert.equal(picker.focusedGroup, "block", "the first heading is the top of the list");
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(kinds("block"), blockIds);
+  assert.match(frame(), /❯ ● Blocks/);
+  assert.match(frame(), /8 selected · \+456 words always on/);
+  picker.handle("", { name: "down" });
+  picker.handle(" ", { name: "space" });
+  assert.equal(kinds("block").length, 7);
+  assert.match(frame(), /◐ Blocks/, "a partial group shows a half mark");
+  picker.handle("", { name: "up" });
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(kinds("block"), blockIds, "a partial group selects the rest");
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(kinds("block"), [], "a full group clears");
+
+  for (let step = 0; step < blocks.length + 1; step += 1) picker.handle("", { name: "down" });
+  assert.equal(picker.focusedGroup, "skill", "moving down from the last item of a group lands on the next heading");
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(kinds("skill"), skillIds, "installed items are never selected");
+  assert.match(frame(), /8 skills · 7 selected · 1 installed[\s\S]*Space clears all 7/);
+  picker.handle("", { name: "up" });
+  assert.equal(picker.focused.id, blocks.at(-1).id, "moving up from a heading lands on the previous group's last item");
+
+  picker.handle("s");
+  picker.handle("", { name: "home" });
+  assert.equal(picker.focusedGroup, "skill", "Home goes to the first heading");
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(picker.selection, [], "clearing a group in the selection view empties it");
+  assert.equal(picker.focusedGroup, undefined);
+  assert.match(frame(), /Nothing selected yet/);
+  picker.handle("", { name: "escape" });
+
+  picker.handle("/");
+  picker.handle("deploy");
+  picker.handle("", { name: "return" });
+  picker.handle("", { name: "home" });
+  const matching = picker.visible.filter(({ kind }) => kind === picker.focusedGroup);
+  assert.ok(matching.length && matching.length < components.filter(({ kind }) => kind === picker.focusedGroup).length);
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(picker.selection.map(({ id }) => id), matching.map(({ id }) => id), "a filtered group selects only its matches");
+
+  for (const [columns, rows] of [[40, 16], [60, 20], [80, 24]]) {
+    const lines = pickerFrame(picker, { columns, rows }).map(stripVTControlCharacters);
+    assert.ok(lines.length < rows && lines.every((line) => displayWidth(line) <= columns - 2), `${columns}x${rows}`);
+    assert.match(lines.join("\n"), new RegExp(`❯ [●◐○] ${componentKinds[picker.focusedGroup].plural}`), `${columns}x${rows} shows the focused heading`);
+  }
 });
 
 test("empty searches and cancellation cannot accidentally select an item", () => {
@@ -389,24 +455,39 @@ test("the picker shows the exact text a block adds and where each agent reads a 
   assert.match(command, /\.grok\/skills\/verify-work\/SKILL\.md\s+Grok Build · \/verify-work only/);
 });
 
-test("the agent screen starts with every agent, keeps existing ones, and needs at least one", () => {
+test("the agent screen starts on All agents, keeps existing ones, and needs at least one", () => {
   const picker = new AgentPicker({ detected: new Set(["codex"]) });
   const frame = () => agentFrame(picker, { columns: 80, rows: 24 }).map(stripVTControlCharacters).join("\n");
   assert.match(frame(), /Which coding agents do you use\?/);
   assert.deepEqual(picker.selection, ["claude", "codex", "grok"], "all agents are selected by default");
-  assert.match(frame(), /● Claude Code\s+skills in \.claude\/skills \(linked\) · \/skill-name/);
+  assert.match(frame(), /❯ ● All agents\s+recommended · every item works in every agent/);
+  assert.match(frame(), /\n {4}● Claude Code\s+skills in \.claude\/skills \(linked\) · \/skill-name/);
   assert.match(frame(), /● Codex\s+skills in \.agents\/skills · \$skill-name\s+detected/);
+  assert.match(frame(), /a all/);
   picker.handle(" ", { name: "space" });
-  picker.handle("2");
-  picker.handle("3");
-  assert.deepEqual(picker.selection, []);
+  assert.deepEqual(picker.selection, [], "Space on All agents clears every agent");
+  assert.match(frame(), /○ All agents/);
   assert.equal(picker.handle("", { name: "return" }), undefined, "Enter needs a choice");
   assert.match(frame(), /Choose at least one agent/);
   picker.handle("1");
   picker.handle("3");
   assert.deepEqual(picker.selection, ["claude", "grok"]);
+  assert.match(frame(), /◐ All agents/, "a partial choice shows a half mark");
+  assert.match(frame(), /❯ {3}● Grok Build/, "number keys move the cursor to the agent");
+  picker.handle("", { name: "up" });
+  picker.handle(" ", { name: "space" });
+  assert.deepEqual(picker.selection, ["claude", "codex", "grok"], "Space toggles the agent under the cursor");
+  assert.match(frame(), /● All agents/);
+  picker.handle("a");
+  assert.deepEqual(picker.selection, [], "a clears every agent when all are selected");
+  picker.handle("a");
+  assert.deepEqual(picker.selection, ["claude", "codex", "grok"], "a selects every agent");
+  assert.equal(picker.cursor, 0);
+  picker.handle("1");
+  picker.handle("2");
   picker.handle("3");
-  assert.deepEqual(picker.selection, ["claude"]);
+  assert.deepEqual(picker.selection, []);
+  picker.handle("1");
   picker.handle(undefined, { name: "paste-start" });
   picker.handle("2", { name: "2" });
   picker.handle(undefined, { name: "paste-end" });
@@ -417,10 +498,15 @@ test("the agent screen starts with every agent, keeps existing ones, and needs a
   const existing = new AgentPicker({ enabled: ["grok"], selected: [] });
   existing.handle("3");
   assert.deepEqual(existing.selection, ["grok"], "setup never drops an agent");
+  existing.handle("a");
+  assert.deepEqual(existing.selection, ["claude", "codex", "grok"]);
+  existing.handle("a");
+  assert.deepEqual(existing.selection, ["grok"], "clearing all keeps existing agents");
   assert.match(agentFrame(existing, { columns: 80, rows: 24 }).map(stripVTControlCharacters).join("\n"), /✓ Grok Build.*set up/);
   for (const [columns, rows] of [[40, 16], [60, 20], [120, 40]]) {
     const lines = agentFrame(picker, { columns, rows }).map(stripVTControlCharacters);
     assert.ok(lines.length < rows && lines.every((line) => displayWidth(line) <= columns - 2), `${columns}x${rows}`);
+    assert.ok(lines.some((line) => line.includes("All agents")), `${columns}x${rows} keeps All agents`);
   }
 });
 

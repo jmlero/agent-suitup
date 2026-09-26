@@ -12,6 +12,9 @@ export const agents = [
 
 export const agentIds = agents.map(({ id }) => id);
 
+// The default choice: set up every agent so each installed item works in all of them.
+export const allAgentsSummary = "recommended · every item works in every agent";
+
 export function agentNames(ids) {
   return agents.filter(({ id }) => ids.includes(id)).map(({ name }) => name);
 }

@@ -118,7 +118,7 @@ test("interactive init asks for agents first and installs a block through the ru
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Which coding agents do you use\?[\s\S]*1  Claude Code[\s\S]*2  Codex[\s\S]*3  Grok Build/);
+  assert.match(initialized.stdout, /Which coding agents do you use\?\n.*\n  all  All agents\s+recommended · every item works in every agent\n  1    Claude Code[\s\S]*2    Codex[\s\S]*3    Grok Build/);
   assert.match(initialized.stdout, /Agents: Codex/);
   assert.match(initialized.stdout, /Blocks \(8\)/);
   assert.match(initialized.stdout, /Always-on rules in \.agents\/rules\.md, linked from AGENTS\.md/);
@@ -455,7 +455,7 @@ test("interactive add recovers from typos and installs the chosen user scope", a
 test("pressing Enter at the agent question sets up every agent", async (context) => {
   const fixture = makeFixture(context);
   const result = await runInteractive(fixture, [
-    [/Your agents \(numbers or names, e\.g\. 1,3\) \[all\]/, ""],
+    [/Your agents \(all, or numbers or names, e\.g\. 1,3\) \[all\]/, ""],
     [/Select numbers or ranges/, "command/verify-work"],
     [/Install them for/, ""],
     [/Install this selection/, "y"],

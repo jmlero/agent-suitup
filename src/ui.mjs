@@ -1,29 +1,9 @@
-import { agentNames, agents } from "./agents.mjs";
+import { agentNames, agents, allAgentsSummary } from "./agents.mjs";
 import { aggregateContextCost, componentContextCost, requireComponent } from "./catalog.mjs";
-import { componentGuide, invocations } from "./component-guide.mjs";
+import { componentGuide, componentKinds, invocations } from "./component-guide.mjs";
 
-const sections = [
-  {
-    kind: "block",
-    title: "Blocks",
-    description: "Always-on rules in .agents/rules.md, linked from AGENTS.md; your own text is preserved",
-  },
-  {
-    kind: "skill",
-    title: "Skills",
-    description: "Workflows the agent loads when a task needs them",
-  },
-  {
-    kind: "command",
-    title: "Skill commands",
-    description: "Skills that run only when you invoke them: /name in Claude Code and Grok Build, $name in Codex",
-  },
-  {
-    kind: "plugin",
-    title: "Integrations",
-    description: "Claude Code plugins; their prerequisites are set up separately",
-  },
-];
+const sections = ["block", "skill", "command", "plugin"]
+  .map((kind) => ({ kind, title: componentKinds[kind].plural, description: componentKinds[kind].about }));
 
 const sectionAliases = new Map([
   ["block", "block"],
@@ -42,9 +22,13 @@ const sectionAliases = new Map([
   ["integrations", "plugin"],
 ]);
 
+export function sectionAlias(value) {
+  return sectionAliases.get(value.toLowerCase());
+}
+
 export function sectionKind(value) {
   if (!value || value === "all") return null;
-  const kind = sectionAliases.get(value.toLowerCase());
+  const kind = sectionAlias(value);
   if (!kind) {
     throw new Error(`Unknown section: ${value}. Use blocks, skills, commands, or integrations.`);
   }
@@ -79,9 +63,10 @@ export function formatAgentChoices(detected = new Set(), enabled = []) {
   return [
     paint("1", "Which coding agents do you use?"),
     paint("2", "Every agent reads AGENTS.md. Skills and skill commands are installed where each agent looks for them."),
+    `  all  ${"All agents".padEnd(width)}${paint("2", allAgentsSummary)}`,
     ...agents.map((agent, index) => {
       const tag = enabled.includes(agent.id) ? "set up, kept" : detected.has(agent.id) ? "detected" : "";
-      return `  ${index + 1}  ${agent.name.padEnd(width)}${paint("2", agent.setup)}${tag ? `  ${paint("32", tag)}` : ""}`;
+      return `  ${String(index + 1).padEnd(3)}  ${agent.name.padEnd(width)}${paint("2", agent.setup)}${tag ? `  ${paint("32", tag)}` : ""}`;
     }),
   ].join("\n");
 }

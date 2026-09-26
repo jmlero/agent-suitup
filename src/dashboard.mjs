@@ -1,5 +1,5 @@
 import { stripVTControlCharacters } from "node:util";
-import { agentNames, agents } from "./agents.mjs";
+import { agentNames, agents, allAgentsSummary } from "./agents.mjs";
 import { aggregateContextCost } from "./catalog.mjs";
 import { componentGuide, componentKinds } from "./component-guide.mjs";
 import { paint } from "./ui.mjs";
@@ -20,6 +20,8 @@ export class Picker {
     this.installedScopes = installedScopes;
     this.selected = new Set();
     this.cursor = 0;
+    // True when the focus is on the heading of visible[cursor]'s group.
+    this.onHeading = false;
     this.tab = "all";
     this.query = "";
     this.searching = false;
@@ -38,13 +40,50 @@ export class Picker {
       && words.every((word) => `${component.id} ${component.name} ${component.description} ${Object.values(component.selection ?? {}).join(" ")}`.toLowerCase().includes(word)));
   }
 
-  get focused() { return this.inspected ?? this.visible[this.cursor]; }
+  get focused() { return this.inspected ?? (this.onHeading ? undefined : this.visible[this.cursor]); }
+  get focusedGroup() { return !this.inspected && this.onHeading ? this.visible[this.cursor]?.kind : undefined; }
+
+  group(kind) { return this.visible.filter((component) => component.kind === kind); }
   get selection() { return this.components.filter(({ id }) => this.selected.has(id)); }
 
   toggle(component) {
     if (!component || this.installedIds.has(component.id)) return;
     this.selected.has(component.id) ? this.selected.delete(component.id) : this.selected.add(component.id);
-    this.cursor = Math.min(this.cursor, Math.max(0, this.visible.length - 1));
+    this.clamp();
+  }
+
+  // Selects every visible item in a group, or clears them when all are selected.
+  toggleGroup(kind) {
+    const available = this.group(kind).filter(({ id }) => !this.installedIds.has(id));
+    const allSelected = available.every(({ id }) => this.selected.has(id));
+    for (const { id } of available) allSelected ? this.selected.delete(id) : this.selected.add(id);
+    this.clamp();
+  }
+
+  clamp() {
+    const visible = this.visible;
+    this.cursor = Math.min(this.cursor, Math.max(0, visible.length - 1));
+    // A heading keeps the focus only while it leads the focused item's group.
+    if (this.onHeading && visible[this.cursor - 1]?.kind === visible[this.cursor]?.kind) {
+      this.cursor = visible.findIndex(({ kind }) => kind === visible[this.cursor].kind);
+    }
+    if (!visible.length) this.onHeading = false;
+  }
+
+  move(direction) {
+    const visible = this.visible;
+    const first = (index) => index === 0 || visible[index - 1].kind !== visible[index].kind;
+    if (!visible.length) return;
+    if (direction > 0) {
+      if (this.onHeading) this.onHeading = false;
+      else if (this.cursor + 1 < visible.length) {
+        this.cursor += 1;
+        this.onHeading = first(this.cursor);
+      }
+    } else if (this.onHeading) {
+      if (this.cursor > 0) { this.cursor -= 1; this.onHeading = false; }
+    } else if (first(this.cursor)) this.onHeading = true;
+    else this.cursor -= 1;
   }
 
   handle(text, key = {}) {
@@ -62,6 +101,7 @@ export class Picker {
       const value = (text ?? "").replace(/[\x00-\x1f\x7f]+/g, " ");
       if (value && !(value === " " && (!this.query || this.query.endsWith(" ")))) this.query += value;
       this.cursor = this.detailOffset = 0;
+      this.onHeading = false;
       return;
     }
     // Nothing is visible to act on until the terminal is large enough.
@@ -80,6 +120,7 @@ export class Picker {
         this.query = "";
         if (this.tab === "selected") this.tab = "all";
         this.cursor = this.detailOffset = 0;
+        this.onHeading = false;
         return;
       }
       return "cancel";
@@ -89,6 +130,7 @@ export class Picker {
       else if (key.name === "backspace") this.query = graphemes(this.query).slice(0, -1).join("");
       else if (text && !key.ctrl && !key.meta && !/[\x00-\x1f\x7f]/.test(text)) this.query += text;
       this.cursor = this.detailOffset = 0;
+      this.onHeading = false;
       return;
     }
     const number = /^[1-9]$/.test(text ?? "") ? Number(text) : 0;
@@ -100,27 +142,29 @@ export class Picker {
         : (Math.max(0, this.tabs.findIndex(({ id }) => id === current)) + direction + this.tabs.length) % this.tabs.length;
       this.tab = this.tabs[index].id;
       this.cursor = this.detailOffset = 0;
+      this.onHeading = false;
       return;
     }
     if (key.name === "pageup" || key.name === "pagedown") { this.scrollDetails(key); return; }
-    if (key.name === "up") this.cursor = Math.max(0, this.cursor - 1);
-    else if (key.name === "down") this.cursor = Math.min(Math.max(0, this.visible.length - 1), this.cursor + 1);
-    else if (key.name === "home") this.cursor = 0;
-    else if (key.name === "end") this.cursor = Math.max(0, this.visible.length - 1);
-    else if (key.name === "space" || text === " ") this.toggle(this.focused);
+    if (key.name === "up") this.move(-1);
+    else if (key.name === "down") this.move(1);
+    else if (key.name === "home") { this.cursor = 0; this.onHeading = this.visible.length > 0; }
+    else if (key.name === "end") { this.cursor = Math.max(0, this.visible.length - 1); this.onHeading = false; }
+    else if (key.name === "space" || text === " ") this.focusedGroup ? this.toggleGroup(this.focusedGroup) : this.toggle(this.focused);
     else if (text === "/") this.searching = true;
     else if (text === "i") this.inspected = this.focused ?? null;
     else if (text === "s") {
       if (this.tab !== "selected") this.returnTab = this.tab;
       this.tab = this.tab === "selected" ? "all" : "selected";
       this.cursor = 0;
+      this.onHeading = false;
     }
     else if (text === "a") {
       const available = this.visible.filter(({ id }) => !this.installedIds.has(id));
       const allSelected = available.every(({ id }) => this.selected.has(id));
       for (const { id } of available) allSelected ? this.selected.delete(id) : this.selected.add(id);
-      this.cursor = Math.min(this.cursor, Math.max(0, this.visible.length - 1));
-    } else if (text === "n") { this.selected.clear(); this.cursor = 0; }
+      this.clamp();
+    } else if (text === "n") { this.selected.clear(); this.cursor = 0; this.onHeading = false; }
     else if (key.name === "return") return "submit";
     this.detailOffset = 0;
   }
@@ -152,13 +196,16 @@ export function pickerFrame(picker, {
   const guide = focused ? componentGuide(focused, {
     scope: picker.installedScopes.get(focused.id) ?? scope, adapters, recommendation: suggest(focused),
   }) : null;
+  const details = (detailWidth, detailHeight) => picker.focusedGroup
+    ? groupLines(picker, picker.focusedGroup, detailWidth, detailHeight)
+    : detailLines(picker, guide, detailWidth, detailHeight);
   let body;
   if (picker.inspected) {
     body = detailLines(picker, guide, width, height);
   } else if (width >= 76) {
     const leftWidth = Math.min(44, Math.max(32, Math.floor(width * 0.38)));
     const left = listLines(picker, leftWidth, height, suggest);
-    const right = detailLines(picker, guide, width - leftWidth - 3, height);
+    const right = details(width - leftWidth - 3, height);
     body = Array.from({ length: height }, (_, index) =>
       `${pad(fit(left[index] ?? "", leftWidth), leftWidth)}${paint("2", " │ ")}${right[index] ?? ""}`);
   } else {
@@ -167,14 +214,15 @@ export function pickerFrame(picker, {
     body = [
       ...padLines(listLines(picker, width, listHeight, suggest), listHeight),
       rule(width),
-      ...detailLines(picker, guide, width, height - listHeight - 1),
+      ...details(width, height - listHeight - 1),
     ];
   }
   return [...header, ...body, ...footer].map((line) => fit(line, width));
 }
 
 export class AgentPicker {
-  // Every agent starts selected, so installed content works with all of them.
+  // Row 0 is "All agents"; every agent starts selected, so installed content
+  // works with all of them.
   constructor({ enabled = [], detected = new Set(), selected = agents.map(({ id }) => id) } = {}) {
     this.enabled = new Set(enabled);
     this.detected = detected;
@@ -187,11 +235,18 @@ export class AgentPicker {
 
   get selection() { return agents.filter(({ id }) => this.selected.has(id)).map(({ id }) => id); }
 
+  get all() { return agents.every(({ id }) => this.selected.has(id)); }
+
   toggle(index) {
     const { id } = agents[index];
     // Setup only adds agents; remove --adapter drops one explicitly.
     if (this.enabled.has(id)) return;
     this.selected.has(id) ? this.selected.delete(id) : this.selected.add(id);
+    this.warning = "";
+  }
+
+  toggleAll() {
+    this.selected = new Set(this.all ? this.enabled : agents.map(({ id }) => id));
     this.warning = "";
   }
 
@@ -203,9 +258,10 @@ export class AgentPicker {
     const number = /^[1-9]$/.test(text ?? "") ? Number(text) : 0;
     if (key.name === "escape") return "cancel";
     if (key.name === "up") this.cursor = Math.max(0, this.cursor - 1);
-    else if (key.name === "down") this.cursor = Math.min(agents.length - 1, this.cursor + 1);
-    else if (key.name === "space" || text === " ") this.toggle(this.cursor);
-    else if (number && number <= agents.length) { this.cursor = number - 1; this.toggle(this.cursor); }
+    else if (key.name === "down") this.cursor = Math.min(agents.length, this.cursor + 1);
+    else if (key.name === "space" || text === " ") this.cursor ? this.toggle(this.cursor - 1) : this.toggleAll();
+    else if (text === "a" || text === "0") { this.cursor = 0; this.toggleAll(); }
+    else if (number && number <= agents.length) { this.cursor = number; this.toggle(number - 1); }
     else if (key.name === "return") {
       if (this.selected.size) return "submit";
       this.warning = "Choose at least one agent with Space.";
@@ -220,22 +276,28 @@ export function agentFrame(model, { columns = 80, rows = 24 } = {}) {
   const nameWidth = Math.max(...agents.map(({ name }) => name.length)) + 2;
   const tag = (agent) => model.enabled.has(agent.id) ? "set up" : model.detected.has(agent.id) ? "detected" : "";
   const tagWidth = Math.max(0, ...agents.map((agent) => tag(agent).length));
-  const available = width - 4 - nameWidth - (tagWidth ? tagWidth + 2 : 0);
-  const inline = agents.every(({ setup }) => length(setup) <= available);
-  const footer = [rule(width), ...hintLines([["↑↓", "move"], ["space", "toggle"], ["enter", "continue"], ["esc", "quit"]], width)];
+  // Agents sit two columns in, under the "All agents" row.
+  const available = width - 6 - nameWidth - (tagWidth ? tagWidth + 2 : 0);
+  const inline = [allAgentsSummary, ...agents.map(({ setup }) => setup)].every((text) => length(text) <= available);
+  const footer = [rule(width), ...hintLines([["↑↓", "move"], ["space", "toggle"], ["a", "all"], ["enter", "continue"], ["esc", "quit"]], width)];
   const intro = wrap("Every agent reads AGENTS.md. Skills and skill commands are installed where each agent looks for them.", width)
     .map((line) => paint("2", line));
+  const pointer = (index) => index === model.cursor ? paint("1;36", "❯") : " ";
+  const allMark = model.all ? paint("1;32", "●") : model.selected.size ? paint("32", "◐") : paint("2", "○");
+  const allName = pad("All agents", nameWidth + 2);
+  const allRow = [`${pointer(0)} ${allMark} ${model.cursor === 0 ? paint("1", allName) : allName}`
+    + (inline ? paint("2", allAgentsSummary) : "")];
   const list = (details) => agents.flatMap((agent, index) => {
     const mark = model.enabled.has(agent.id) ? paint("32", "✓") : model.selected.has(agent.id) ? paint("1;32", "●") : paint("2", "○");
-    const lead = `${index === model.cursor ? paint("1;36", "❯") : " "} ${mark} `;
-    const name = index === model.cursor ? paint("1", pad(agent.name, nameWidth)) : pad(agent.name, nameWidth);
+    const lead = `${pointer(index + 1)}   ${mark} `;
+    const name = index + 1 === model.cursor ? paint("1", pad(agent.name, nameWidth)) : pad(agent.name, nameWidth);
     const label = tag(agent) ? paint("2", tag(agent)) : "";
     if (inline) return [`${lead}${name}${paint("2", pad(agent.setup, available))}${label ? `  ${label}` : ""}`];
-    return [`${lead}${name}${label}`, ...(details ? [`    ${paint("2", fit(agent.setup, width - 4))}`] : [])];
+    return [`${lead}${name}${label}`, ...(details ? [`      ${paint("2", fit(agent.setup, width - 6))}`] : [])];
   });
   // Short terminals drop the explanation first, then each agent's details.
   const budget = rows - 1 - footer.length;
-  const layouts = [[...intro, "", ...list(true)], list(true), list(false)];
+  const layouts = [[...intro, "", ...allRow, ...list(true)], [...allRow, ...list(true)], [...allRow, ...list(false)]];
   const body = layouts.find((layout) => layout.length + 4 <= budget) ?? layouts.at(-1);
   const lines = [
     titleLine(width, 1, []),
@@ -289,27 +351,62 @@ function listLines(picker, width, height, suggest) {
   }
   const rows = [];
   for (const [index, component] of visible.entries()) {
-    if (height > 2 && component.kind !== visible[index - 1]?.kind) rows.push({ heading: component.kind });
+    if (component.kind !== visible[index - 1]?.kind) rows.push({ heading: component.kind });
     rows.push({ component });
   }
-  const focus = Math.max(0, rows.findIndex((row) => row.component === picker.focused));
+  const focus = Math.max(0, rows.findIndex((row) => picker.focusedGroup
+    ? row.heading === picker.focusedGroup : row.component === picker.focused));
   const overflow = rows.length > height;
   const space = overflow && height > 2 ? height - 1 : height;
   let start = Math.max(0, Math.min(focus - Math.floor(space / 2), rows.length - space));
   // Show the heading of the first visible group whenever the focus still fits.
   if (start > 0 && rows[start - 1].heading && focus - start + 1 < space) start -= 1;
   const lines = rows.slice(start, start + space).map((row) => row.heading
-    ? headingLine(row.heading, width) : itemLine(picker, row.component, width, suggest));
+    ? headingLine(picker, row.heading, width) : itemLine(picker, row.component, width, suggest));
   if (space < height) {
     lines.push(paint("2", fit(`${picker.cursor + 1} of ${visible.length}${start + space < rows.length ? " ↓" : ""}`, width)));
   }
   return lines;
 }
 
-function headingLine(kind, width) {
+function headingLine(picker, kind, width) {
   const { plural, summary, color } = componentKinds[kind];
+  const active = picker.focusedGroup === kind;
   const title = paint(`1;${color}`, plural);
-  return length(`${plural}  ${summary}`) <= width ? `${title}  ${paint("2", summary)}` : fit(title, width);
+  const lead = `${active ? paint("1;36", "❯") : " "} ${groupMark(picker, kind)} `;
+  return length(`    ${plural}  ${summary}`) <= width ? `${lead}${title}  ${paint("2", summary)}` : fit(`${lead}${title}`, width);
+}
+
+// ● every item is in, ◐ some are, ○ none; installed items count as in.
+function groupMark(picker, kind) {
+  const members = picker.group(kind);
+  const chosen = members.filter(({ id }) => picker.installedIds.has(id) || picker.selected.has(id)).length;
+  if (members.length && members.every(({ id }) => picker.installedIds.has(id))) return paint("32", "✓");
+  return chosen === members.length ? paint("1;32", "●") : chosen ? paint("32", "◐") : paint("2", "○");
+}
+
+function groupLines(picker, kind, width, height) {
+  const { plural, about } = componentKinds[kind];
+  const members = picker.group(kind);
+  const available = members.filter(({ id }) => !picker.installedIds.has(id));
+  const selected = available.filter(({ id }) => picker.selected.has(id)).length;
+  const installed = members.length - available.length;
+  const lines = [
+    paint("1", plural),
+    paint("2", fit([`${members.length} ${members.length === 1 ? componentKinds[kind].name.toLowerCase() : plural.toLowerCase()}`,
+      `${selected} selected`, installed ? `${installed} installed` : ""].filter(Boolean).join(" · "), width)),
+    "",
+    ...wrap(`${about}.`, width),
+    "",
+    ...wrap(!available.length ? "Everything in this group is already installed."
+      : selected === available.length ? `Space clears all ${available.length}.`
+        : `Space selects all ${available.length}${picker.query ? " matching" : ""}; press it again to clear them.`, width),
+  ];
+  const cost = aggregateContextCost(available);
+  if (kind === "block" && available.length && cost.words) {
+    lines.push("", ...wrap(`All of them add ${cost.words} words (~${cost.estimatedTokens} tokens) to every session.`, width).map((line) => paint("2", line)));
+  }
+  return padLines(lines, height);
 }
 
 function itemLine(picker, component, width, suggest) {
@@ -319,12 +416,13 @@ function itemLine(picker, component, width, suggest) {
   const mark = installed ? paint("32", "✓") : selected ? paint("1;32", "●") : paint("2", "○");
   // Suggestions show as a word when the name still fits, otherwise as a star.
   const suggested = !installed && suggest(component).pick;
-  const tag = !suggested ? "" : length(component.name) + 14 <= width ? "suggested" : "★";
+  const tag = !suggested ? "" : length(component.name) + 16 <= width ? "suggested" : "★";
   const tagWidth = tag ? length(tag) + 1 : 0;
-  const name = fit(component.name, Math.max(1, width - 4 - tagWidth));
+  // Items sit two columns in, under their group heading.
+  const name = fit(component.name, Math.max(1, width - 6 - tagWidth));
   const styled = active ? paint("1", name) : installed ? paint("2", name) : name;
-  const gap = " ".repeat(Math.max(0, width - 4 - length(name) - tagWidth));
-  return `${active ? paint("1;36", "❯") : " "} ${mark} ${styled}${tag ? `${gap} ${paint("33", tag)}` : ""}`;
+  const gap = " ".repeat(Math.max(0, width - 6 - length(name) - tagWidth));
+  return `${active ? paint("1;36", "❯") : " "}   ${mark} ${styled}${tag ? `${gap} ${paint("33", tag)}` : ""}`;
 }
 
 function detailLines(picker, guide, width, height) {

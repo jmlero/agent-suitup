@@ -24,16 +24,17 @@ Run commands from the project you want to configure:
 agent-suitup init
 ```
 
-Setup has three steps: **Agents → Choose → Review**. All three agents (Claude
-Code, Codex, and Grok Build) start selected, so everything you install works
-with each of them; deselect any you do not use. Agents found on your `PATH` or
-in the project are marked as detected. Then browse **Blocks, Skills, Skill
-commands, and Integrations** in one place, choose an installation scope, and
-review the files before installing. No catalog item is preselected. Skills can
-be installed on their own.
+Setup has three steps: **Agents → Choose → Review**. The first row, **All
+agents**, starts selected, so everything you install works with Claude Code,
+Codex, and Grok Build; press Enter to keep it, or deselect any agent you do not
+use. Agents found on your `PATH` or in the project are marked as detected. Then
+browse **Blocks, Skills, Skill commands, and Integrations** in one place, choose
+an installation scope, and review the files before installing. No catalog item
+is preselected. Skills can be installed on their own.
 
 - **Tab**, **Shift+Tab**, **← / →**, or **1–5** switches categories. **↑ / ↓**
-  browses, **Space** selects, and **Enter** continues.
+  browses, **Space** selects, and **Enter** continues. Each group heading is a
+  row too: **Space** on **Blocks** selects every block, and again clears them.
 - **/** to search; Enter keeps the filter and Esc clears it. Pasted text goes to
   the search, so it never triggers shortcuts. Selections survive filtering. **a**
   toggles all visible items; **n** clears the selection.
@@ -46,10 +47,11 @@ be installed on their own.
 - At review, **p** shows exact changes, **Enter** installs, and **n** cancels.
 
 Use `init --plain` for numbered prompts, including with screen readers. This
-mode also activates for piped input, small terminals, and `TERM=dumb`. Agents
-are chosen by number or name (`1,2` or `claude,codex`). The catalog accepts
-numbers, ranges (`1,3-5`), component IDs, `all`, or `none`, and lets you correct
-invalid answers. Type `i <number or ID>` to read an item's guide. Use
+mode also activates for piped input, small terminals, and `TERM=dumb`. Enter
+at the agent question sets up all agents; otherwise choose by number or name
+(`1,2` or `claude,codex`). The catalog accepts numbers, ranges (`1,3-5`),
+component IDs, groups (`blocks`, `skills`, `commands`, `integrations`), `all`,
+or `none`, and lets you correct invalid answers. Type `i <number or ID>` to read an item's guide. Use
 `--interactive` when piping answers and `NO_COLOR=1` to
 disable color. Ctrl+C cancels setup. Esc returns from a guide or selection view,
 clears a search, or quits the catalog when there is nothing to dismiss. Closing
