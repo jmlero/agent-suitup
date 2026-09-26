@@ -108,29 +108,8 @@ async function initialize({ cwd, home, flags }) {
   }
   const prompt = new Prompts({ plain: flags.plain });
   try {
-    const adapters = await chooseAgents(prompt, flags, existing, detectedAgents);
-    console.log(`\n${formatSetupStep(2)}`);
-    const { ids: selectedIds, scope } = await chooseComponents(prompt,
-      catalog.filter((component) => availableWithAdapters(component, adapters)), detected, installedIds, {
-        scope: flags.scope ?? "project", adapters,
-        installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
-      });
-    if (!selectedIds.length) {
-      console.log("No new components selected. Repository left unchanged.");
-      return;
-    }
-    const components = selectedIds.map((id) => requireComponent(id));
-    const byId = new Map((existing?.components ?? []).map((selection) => [selection.id, selection]));
-    for (const component of components) {
-      byId.set(component.id, { id: component.id, scope: componentScope(component, scope) });
-    }
-    const manifest = normalizeManifest({
-      ...(existing ?? emptyManifest()), adapters, components: [...byId.values()],
-    });
-    console.log(`\n${formatSetupStep(3)}`);
-    await applyDesired({
-      cwd, home, manifest, flags, writeManifest: true,
-      displayComponents: components, action: "agent-suitup ready", suggestMore: true, prompt,
+    await setup(prompt, {
+      cwd, home, flags, existing, detected, detectedAgents, action: "agent-suitup ready", suggestMore: true,
     });
   } finally {
     prompt.close();
@@ -139,64 +118,84 @@ async function initialize({ cwd, home, flags }) {
 
 async function add({ cwd, home, flags, values }) {
   const existing = readManifest(cwd);
-  const detected = detectStack(cwd);
-  let selectedIds = values;
-  let interactiveScope = null;
-  let interactiveAdapters = null;
-  let prompt;
   maybeBanner("Add rules, skills, and skill commands for your coding agents.");
-
-  try {
-    if (!selectedIds.length) {
-      if (!process.stdin.isTTY && !flags.interactive) {
-        throw new Error("Usage: agent-suitup add <component> [component...] or add --interactive");
-      }
-      const installedIds = new Set(existing?.components.map(({ id }) => id) ?? []);
-      prompt = new Prompts({ plain: flags.plain });
-      interactiveAdapters = await chooseAgents(prompt, flags, existing, detectAgents({ cwd }));
-      console.log(`\n${formatSetupStep(2)}`);
-      const candidates = listComponents().filter((component) => availableWithAdapters(component, interactiveAdapters));
-      ({ ids: selectedIds, scope: interactiveScope } = await chooseComponents(prompt, candidates, detected, installedIds, {
-        scope: flags.scope ?? "project", adapters: interactiveAdapters,
-        installedScopes: new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []),
-      }));
-      if (!selectedIds.length) {
-        console.log("No new components selected. Repository left unchanged.");
-        return;
-      }
-      console.log(`\n${formatSetupStep(3)}`);
+  if (!values.length) {
+    if (!process.stdin.isTTY && !flags.interactive) {
+      throw new Error("Usage: agent-suitup add <component> [component...] or add --interactive");
     }
-
-    const components = selectedIds.map((id) => requireComponent(id));
-    const adapters = interactiveAdapters
-      ?? enableRequiredAdapters(withAdapters(existing, flags.adapters), components, flags.adapters);
-    const byId = new Map((existing?.components ?? []).map((selection) => [selection.id, selection]));
-    for (const component of components) {
-      const { id } = component;
-      byId.set(id, {
-        id,
-        // The picker starts from --scope, so its choice is the final one.
-        scope: interactiveScope ? componentScope(component, interactiveScope)
-          : flags.scope ?? byId.get(id)?.scope ?? componentScope(component, null),
+    const prompt = new Prompts({ plain: flags.plain });
+    try {
+      await setup(prompt, {
+        cwd, home, flags, existing, detected: detectStack(cwd), detectedAgents: detectAgents({ cwd }), action: "Components added",
       });
+    } finally {
+      prompt.close();
     }
-    const manifest = normalizeManifest({
-      ...(existing ?? emptyManifest()),
-      adapters,
-      components: [...byId.values()],
+    return;
+  }
+
+  const components = values.map((id) => requireComponent(id));
+  const adapters = enableRequiredAdapters(withAdapters(existing, flags.adapters), components, flags.adapters);
+  const byId = new Map((existing?.components ?? []).map((selection) => [selection.id, selection]));
+  for (const component of components) {
+    const { id } = component;
+    byId.set(id, { id, scope: flags.scope ?? byId.get(id)?.scope ?? componentScope(component, null) });
+  }
+  const manifest = normalizeManifest({
+    ...(existing ?? emptyManifest()),
+    adapters,
+    components: [...byId.values()],
+  });
+  await applyDesired({
+    cwd,
+    home,
+    manifest,
+    flags,
+    writeManifest: true,
+    displayComponents: components,
+    action: "Components added",
+  });
+}
+
+// Agents → Choose → Review. b steps back and keeps the earlier choices; there
+// is no agent step to return to when --agent chose them.
+async function setup(prompt, { cwd, home, flags, existing, detected, detectedAgents, action, suggestMore = false }) {
+  const installedIds = new Set(existing?.components.map(({ id }) => id) ?? []);
+  const installedScopes = new Map(existing?.components.map(({ id, scope }) => [id, scope]) ?? []);
+  const agentStep = flags.adapters === null;
+  let adapters = null;
+  let selection = { ids: [], scope: flags.scope ?? "project" };
+  let step = 1;
+  while (true) {
+    if (step === 1) adapters = await chooseAgents(prompt, flags, existing, detectedAgents, adapters);
+    const picking = prompt.canPick();
+    if (!picking) console.log(`\n${formatSetupStep(2)}`);
+    const candidates = listComponents().filter((component) => availableWithAdapters(component, adapters));
+    const { back, ...choice } = await chooseComponents(prompt, candidates, detected, installedIds, {
+      scope: selection.scope, selected: selection.ids, adapters, installedScopes, back: agentStep,
     });
-    await applyDesired({
-      cwd,
-      home,
-      manifest,
-      flags,
-      writeManifest: true,
-      displayComponents: components,
-      action: "Components added",
-      prompt,
+    selection = choice;
+    if (back) { step = 1; continue; }
+    step = 2;
+    if (picking) console.log(`\n${formatSetupStep(2)}`);
+    if (!selection.ids.length) {
+      console.log("No new components selected. Repository left unchanged.");
+      return;
+    }
+    const components = selection.ids.map((id) => requireComponent(id));
+    console.log(`Selected: ${components.map(({ name }) => name).join(", ")}`);
+    const byId = new Map((existing?.components ?? []).map((item) => [item.id, item]));
+    // The picker starts from --scope, so its choice is the final one.
+    for (const component of components) {
+      byId.set(component.id, { id: component.id, scope: componentScope(component, selection.scope) });
+    }
+    const manifest = normalizeManifest({ ...(existing ?? emptyManifest()), adapters, components: [...byId.values()] });
+    console.log(`\n${formatSetupStep(3)}`);
+    const outcome = await applyDesired({
+      cwd, home, manifest, flags, writeManifest: true,
+      displayComponents: components, action, suggestMore, prompt, back: true,
     });
-  } finally {
-    prompt?.close();
+    if (outcome !== "back") return;
   }
 }
 
@@ -313,17 +312,24 @@ async function applyDesired({
   action = "Applied",
   suggestMore = false,
   prompt,
+  back = false,
 }) {
-  if (output.isTTY) console.log(formatProgress("Preparing your setup…"));
+  // Shown only while planning runs, which can include downloads.
+  if (output.isTTY) output.write(formatProgress("Preparing your setup…"));
   const previousLock = readLock(cwd);
-  const result = await reconcile({
-    cwd,
-    home,
-    manifest,
-    previousLock,
-    force: flags.force,
-    refreshRemote,
-  });
+  let result;
+  try {
+    result = await reconcile({
+      cwd,
+      home,
+      manifest,
+      previousLock,
+      force: flags.force,
+      refreshRemote,
+    });
+  } finally {
+    if (output.isTTY) output.write("\r\x1b[2K");
+  }
   const paths = statePaths(cwd);
   if (writeManifest) result.planner.write(paths.manifest, jsonDocument(manifest), { allowExisting: true });
   result.planner.write(paths.lock, jsonDocument(result.lock), { allowExisting: true });
@@ -342,14 +348,15 @@ async function applyDesired({
   if (prompt) {
     console.log(`\n${formatInstallReview(result.planner, manifest, displayComponents)}\n`);
     while (true) {
-      const answer = (await prompt.question(formatApprovalPrompt())).trim().toLowerCase();
+      const answer = (await prompt.question(formatApprovalPrompt({ back }))).trim().toLowerCase();
       if (!answer || answer === "y" || answer === "yes") break;
       if (answer === "n" || answer === "no") {
         console.log("Installation cancelled. No files written.");
         return;
       }
+      if (back && (answer === "b" || answer === "back")) return "back";
       if (answer === "p" || answer === "preview") console.log(`\n${formatPlan(result.planner)}\n`);
-      else console.log("Use Enter to install, n to cancel, or p to preview exact changes.");
+      else console.log(`Use Enter to install, n to cancel,${back ? " b to go back," : ""} or p to preview exact changes.`);
     }
   }
   result.planner.apply();
@@ -367,13 +374,17 @@ function componentScope(component, requested) {
 }
 
 // Setup only adds agents: existing ones stay, and remove --adapter drops one.
-async function chooseAgents(prompt, flags, existing, detected) {
+// Returning to this step starts from the agents chosen before.
+async function chooseAgents(prompt, flags, existing, detected, previous = null) {
   const current = existing?.adapters ?? [];
   if (flags.adapters !== null) return withAdapters(existing, flags.adapters);
-  console.log(`\n${formatSetupStep(1)}`);
   let chosen;
-  if (prompt.canPick()) chosen = await prompt.pickAgents({ enabled: current, detected });
-  else {
+  // A full-screen step logs its header once it finishes; a plain prompt needs it first.
+  if (prompt.canPick()) {
+    chosen = await prompt.pickAgents({ enabled: current, detected, selected: previous ?? undefined });
+    console.log(`\n${formatSetupStep(1)}`);
+  } else {
+    console.log(`\n${formatSetupStep(1)}`);
     console.log(formatAgentChoices(detected, current));
     while (!chosen) {
       const answer = await prompt.question("Your agents (all, or numbers or names, e.g. 1,3) [all]: ");
@@ -409,13 +420,17 @@ async function chooseComponents(prompt, components, detected, installedIds = new
   console.log("\nChoose blocks, skills, skill commands, and integrations. No item is preselected.\n");
   console.log(formatCatalog(ordered, { detected, installedIds, numbered: true, suggest: suggested }));
   console.log('\nUse numbers, ranges (1,3-5), component IDs, groups (blocks, skills, commands, integrations), all, or none. Enter skips.');
-  console.log('Type i <number or ID> to read its full guide before choosing. Installed items are kept.');
+  console.log(`Type i <number or ID> to read its full guide before choosing${options.back ? ", or b to go back to agents" : ""}. Installed items are kept.`);
   let { scope } = options;
+  // Items chosen before going back stay chosen while they are still available.
+  const kept = (options.selected ?? []).filter((id) => ordered.some((component) => component.id === id));
   const scopable = ordered.some((component) => component.scopes.includes("user"));
   if (scopable) console.log(formatScopeChoice(scope));
   while (true) {
-    const answer = await prompt.question('Select numbers or ranges [none]: ');
+    const answer = await prompt.question(`Select numbers or ranges [${kept.length ? kept.join(",") : "none"}]: `);
     try {
+      if (options.back && answer.trim().toLowerCase() === "b") return { ids: kept, scope, back: true };
+      if (!answer.trim() && kept.length) return { ids: kept, scope };
       if (scopable && answer.trim().toLowerCase() === "u") {
         scope = scope === "user" ? "project" : "user";
         console.log(formatScopeChoice(scope));

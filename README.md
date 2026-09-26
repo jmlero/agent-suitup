@@ -50,6 +50,8 @@ be installed on their own.
 - The review lists your agents, where items install, each group, the always-on
   cost, and every file that changes. **p** shows exact changes, **Enter**
   installs, and **n** cancels.
+- **b** goes back a step: from the review to the catalog, and from the catalog
+  to the agents. Your agents, selection, and install location are kept.
 
 Use `init --plain` for numbered prompts, including with screen readers. This
 mode also activates for piped input, small terminals, and `TERM=dumb`. Enter
@@ -57,7 +59,8 @@ at the agent question sets up all agents; otherwise choose by number or name
 (`1,2` or `claude,codex`). The catalog accepts numbers, ranges (`1,3-5`),
 component IDs, groups (`blocks`, `skills`, `commands`, `integrations`), `all`,
 or `none`, and lets you correct invalid answers. Type `i <number or ID>` to read
-an item's guide, or `u` to switch between this project and all projects. Use
+an item's guide, `u` to switch between this project and all projects, or `b` to
+go back a step; after going back, Enter keeps the previous selection. Use
 `--interactive` when piping answers and `NO_COLOR=1` to
 disable color. Ctrl+C cancels setup. Esc returns from a guide or selection view,
 clears a search, or quits the catalog when there is nothing to dismiss. Closing

@@ -112,7 +112,8 @@ export function pickComponents(components, {
 } = {}) {
   const picker = new Picker(components, options);
   return runScreen(picker, (size) => pickerFrame(picker, { ...options, ...size }),
-    () => ({ ids: picker.selection.map(({ id }) => id), scope: picker.scope }), { input, output });
+    (action) => ({ ids: picker.selection.map(({ id }) => id), scope: picker.scope, ...(action === "back" && { back: true }) }),
+    { input, output });
 }
 
 export function pickAgents({ input = process.stdin, output = process.stdout, ...options } = {}) {
@@ -146,16 +147,16 @@ function runScreen(model, frame, result, { input, output }) {
       if (!wasFlowing) input.pause();
       input.setRawMode(wasRaw);
     };
-    const finish = (error) => {
+    const finish = (error, action) => {
       if (finished) return;
       finished = true;
       try { cleanup(); } catch (cleanupError) { error ??= cleanupError; }
       if (error) reject(error);
-      else resolve(result());
+      else resolve(result(action));
     };
     const onKey = (text, key) => {
       const action = model.handle(text, key);
-      if (action) finish(action === "cancel" ? new PromptCancelled() : null);
+      if (action) finish(action === "cancel" ? new PromptCancelled() : null, action);
       else render();
     };
     const onEnd = () => finish(new PromptCancelled());

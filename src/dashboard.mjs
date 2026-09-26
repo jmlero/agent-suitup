@@ -8,7 +8,9 @@ const kindOrder = ["block", "skill", "command", "plugin"];
 const steps = ["Agents", "Choose", "Review"];
 
 export class Picker {
-  constructor(components, { installedIds = new Set(), installedScopes = new Map(), scope = "project" } = {}) {
+  constructor(components, {
+    installedIds = new Set(), installedScopes = new Map(), scope = "project", selected = [], back = false,
+  } = {}) {
     const rank = (component) => kindOrder.indexOf(component.kind);
     this.components = components.map((component, index) => ({ component, index }))
       .sort((left, right) => rank(left.component) - rank(right.component) || left.index - right.index)
@@ -21,7 +23,10 @@ export class Picker {
     // New items install for this project unless u switches them to all projects.
     this.scope = scope;
     this.scopable = this.components.some((component) => component.scopes.includes("user"));
-    this.selected = new Set();
+    // Choices made before stepping back survive while the item is still offered.
+    this.selected = new Set(selected.filter((id) => !installedIds.has(id) && this.components.some((component) => component.id === id)));
+    // b returns to the agent step when there is one.
+    this.back = back;
     this.cursor = 0;
     // True when the focus is on the heading of visible[cursor]'s group.
     this.onHeading = false;
@@ -157,6 +162,7 @@ export class Picker {
     else if (text === "/") this.searching = true;
     else if (text === "i") this.inspected = this.focused ?? null;
     else if (text === "u" && this.scopable) this.scope = this.scope === "user" ? "project" : "user";
+    else if (text === "b" && this.back) return "back";
     else if (text === "s") {
       if (this.tab !== "selected") this.returnTab = this.tab;
       this.tab = this.tab === "selected" ? "all" : "selected";
@@ -511,8 +517,10 @@ function footerLines(picker, width) {
     : picker.searching
       ? [["type", "to filter"], ["enter", "keep filter"], ["esc", "clear"]]
       : width >= 60
-        ? [["↑↓", "move"], ["space", "select"], ["tab", "category"], ["/", "search"], ["i", "expand"], ["s", "selected"], ["enter", "continue"], ["esc", "quit"]]
-        : [["space", "select"], ["tab", "category"], ["i", "expand"], ["/", "search"], ["enter", "next"], ["esc", "quit"]];
+        ? [["↑↓", "move"], ["space", "select"], ["tab", "category"], ["/", "search"], ["i", "expand"], ["s", "selected"],
+          ...(picker.back ? [["b", "back"]] : []), ["enter", "continue"], ["esc", "quit"]]
+        : [["space", "select"], ["tab", "category"], ["i", "expand"], ["/", "search"], ...(picker.back ? [["b", "back"]] : []),
+          ["enter", "next"], ["esc", "quit"]];
   const lines = hintLines(hints, width);
   if (length(summary) + 3 + length(lines[0]) <= width && lines.length === 1) {
     return [`${summary}${" ".repeat(width - length(summary) - length(lines[0]))}${lines[0]}`];

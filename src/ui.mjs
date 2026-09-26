@@ -181,8 +181,8 @@ export function formatInstallReview(planner, manifest, components) {
     .filter(Boolean).join("\n\n");
 }
 
-export function formatApprovalPrompt() {
-  return `${paint("1;36", "❯")} ${paint("1", "Install this selection?")} ${paint("2", "[Y/n · p preview]")} `;
+export function formatApprovalPrompt({ back = false } = {}) {
+  return `${paint("1;36", "❯")} ${paint("1", "Install this selection?")} ${paint("2", `[Y/n${back ? " · b back" : ""} · p preview]`)} `;
 }
 
 function fileCounts(operations) {

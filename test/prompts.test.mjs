@@ -453,6 +453,26 @@ test("u switches new items between this project and all projects, and the detail
   assert.deepEqual(await result, { ids: [], scope: "project" }, "the picker starts from --scope and returns the final choice");
 });
 
+test("b leaves the picker to go back only when there is a previous step, keeping the selection", async () => {
+  const offered = components.filter(({ kind }) => kind !== "plugin");
+  const picker = new Picker(offered, { selected: ["block/tdd", "plugin/github"], back: true });
+  assert.deepEqual(picker.selection.map(({ id }) => id), ["block/tdd"], "items no longer offered are dropped");
+  assert.match(pickerFrame(picker, { columns: 120, rows: 30 }).map(stripVTControlCharacters).join("\n"), /b back/);
+  picker.handle("/");
+  assert.equal(picker.handle("b", { name: "b" }), undefined, "b types into the search");
+  picker.handle(undefined, { name: "escape" });
+  assert.equal(picker.handle("b", { name: "b" }), "back");
+
+  const first = new Picker(offered);
+  assert.equal(first.handle("b", { name: "b" }), undefined);
+  assert.doesNotMatch(pickerFrame(first, { columns: 120, rows: 30 }).map(stripVTControlCharacters).join("\n"), /b back/);
+
+  const { input, output } = fakeTerminal();
+  const result = pickComponents(offered, { input, output, back: true, selected: ["skill/review-pr"], scope: "user" });
+  input.write("b");
+  assert.deepEqual(await result, { ids: ["skill/review-pr"], scope: "user", back: true });
+});
+
 test("a terminal too small for the picker ignores everything except cancel", () => {
   const picker = new Picker(blocks);
   pickerFrame(picker, { columns: 30, rows: 10 });

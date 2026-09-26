@@ -452,6 +452,40 @@ test("interactive add recovers from typos and installs the chosen user scope", a
   assert.deepEqual(manifest.components, [{ id: "command/verify-work", scope: "user" }]);
 });
 
+test("b steps back from the review and the catalog, keeping earlier choices", async (context) => {
+  const fixture = makeFixture(context);
+  const result = await runInteractive(fixture, [
+    [/Your agents/, "codex"],
+    [/or b to go back to agents[\s\S]*Select numbers or ranges \[none\]/, "skill/review-pr"],
+    [/Install this selection\? \[Y\/n · b back · p preview\]/, "b"],
+    [/Select numbers or ranges \[skill\/review-pr\]/, "b"],
+    [/Your agents/, "claude"],
+    [/Select numbers or ranges \[skill\/review-pr\]/, ""],
+    [/Install this selection/, "y"],
+  ], "init", "--interactive");
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Agents: Codex[\s\S]*Selected: Pull request review[\s\S]*Agents: Claude Code[\s\S]*Selected: Pull request review/);
+  const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
+  assert.deepEqual(manifest.adapters, ["claude"]);
+  assert.deepEqual(manifest.components, [{ id: "skill/review-pr", scope: "project" }]);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".claude/skills/review-pr")));
+});
+
+test("with --agent there is no agent step to go back to, but the review still returns to the catalog", async (context) => {
+  const fixture = makeFixture(context);
+  const result = await runInteractive(fixture, [
+    [/Select numbers or ranges \[none\]/, "b"],
+    [/Select numbers or ranges \[none\]/, "1"],
+    [/Install this selection/, "b"],
+    [/Select numbers or ranges \[block\/tdd\]/, ""],
+    [/Install this selection/, "y"],
+  ], "add", "--interactive", "--adapter", "codex");
+  assert.equal(result.status, 0, result.stderr);
+  assert.doesNotMatch(result.stdout, /go back to agents|Your agents/);
+  assert.match(result.stdout, /Invalid selection: b/);
+  assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).components, [{ id: "block/tdd", scope: "project" }]);
+});
+
 test("pressing Enter at the agent question sets up every agent", async (context) => {
   const fixture = makeFixture(context);
   const result = await runInteractive(fixture, [
