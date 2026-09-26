@@ -205,7 +205,7 @@ function formatChanges(planner) {
 
 export function formatHealthy(componentCount, hasManualSteps = false) {
   const detail = hasManualSteps ? " · manual tools are recorded but not asserted" : "";
-  return `${paint("32", "◆")} ${paint("1;32", "Healthy")} · ${componentCount} component${componentCount === 1 ? "" : "s"} match the manifest and lockfile${detail}.`;
+  return `${paint("32", "◆")} ${paint("1;32", "Healthy")} · ${componentCount} component${componentCount === 1 ? " matches" : "s match"} the manifest and lockfile${detail}.`;
 }
 
 export function formatDryRunFooter() {

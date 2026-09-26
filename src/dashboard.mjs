@@ -24,6 +24,9 @@ export class Picker {
     this.inspected = null;
     this.detailOffset = 0;
     this.detailMaximum = 0;
+    this.returnTab = "all";
+    this.pasting = false;
+    this.tooSmall = false;
   }
 
   get visible() {
@@ -44,6 +47,23 @@ export class Picker {
 
   handle(text, key = {}) {
     if (key.ctrl && (key.name === "c" || key.name === "d")) return "cancel";
+    if (key.name === "paste-start" || key.name === "paste-end") {
+      this.pasting = key.name === "paste-start";
+      if (this.pasting) {
+        this.inspected = null;
+        this.searching = true;
+      }
+      return;
+    }
+    // Pasted text only filters the catalog; it never triggers shortcuts or submits.
+    if (this.pasting) {
+      const value = (text ?? "").replace(/[\x00-\x1f\x7f]+/g, " ");
+      if (value && !(value === " " && (!this.query || this.query.endsWith(" ")))) this.query += value;
+      this.cursor = this.detailOffset = 0;
+      return;
+    }
+    // Nothing is visible to act on until the terminal is large enough.
+    if (this.tooSmall) return key.name === "escape" ? "cancel" : undefined;
     if (this.inspected) {
       if (key.name === "escape" || key.name === "return" || text === "i") {
         this.inspected = null;
@@ -64,15 +84,17 @@ export class Picker {
     }
     if (this.searching) {
       if (key.name === "return" || key.name === "down") this.searching = false;
-      else if (key.name === "backspace") this.query = Array.from(this.query).slice(0, -1).join("");
+      else if (key.name === "backspace") this.query = graphemes(this.query).slice(0, -1).join("");
       else if (text && !key.ctrl && !key.meta && !/[\x00-\x1f\x7f]/.test(text)) this.query += text;
       this.cursor = this.detailOffset = 0;
       return;
     }
     if (key.name === "tab" || key.name === "left" || key.name === "right" || /^[1-5]$/.test(text ?? "")) {
       const direction = key.name === "left" || key.shift ? -1 : 1;
+      // The selection view moves relative to the category it was opened from.
+      const current = this.tab === "selected" ? this.returnTab : this.tab;
       const index = /^[1-5]$/.test(text ?? "") ? Number(text) - 1
-        : (Math.max(0, tabs.findIndex(({ id }) => id === this.tab)) + direction + tabs.length) % tabs.length;
+        : (Math.max(0, tabs.findIndex(({ id }) => id === current)) + direction + tabs.length) % tabs.length;
       this.tab = tabs[index].id;
       this.cursor = this.detailOffset = 0;
       return;
@@ -85,7 +107,11 @@ export class Picker {
     else if (key.name === "space" || text === " ") this.toggle(this.focused);
     else if (text === "/") this.searching = true;
     else if (text === "i") this.inspected = this.focused ?? null;
-    else if (text === "s") { this.tab = this.tab === "selected" ? "all" : "selected"; this.cursor = 0; }
+    else if (text === "s") {
+      if (this.tab !== "selected") this.returnTab = this.tab;
+      this.tab = this.tab === "selected" ? "all" : "selected";
+      this.cursor = 0;
+    }
     else if (text === "a") {
       const available = this.visible.filter(({ id }) => !this.installedIds.has(id));
       const allSelected = available.every(({ id }) => this.selected.has(id));
@@ -110,7 +136,8 @@ export function pickerFrame(picker, {
   columns = 80, rows = 24, suggest = () => ({ pick: false }), scope = "project", adapters = [],
 } = {}) {
   const width = Math.max(1, Math.min(132, columns - 2));
-  if (columns < 40 || rows < 16) return [fit("Resize the terminal, or Esc to cancel.", width)];
+  picker.tooSmall = columns < 40 || rows < 16;
+  if (picker.tooSmall) return [fit("Resize the terminal, or Esc to cancel.", width)];
   const focused = picker.focused;
   const cost = aggregateContextCost(picker.selection);
   const prefix = [
@@ -124,7 +151,8 @@ export function pickerFrame(picker, {
   if (!picker.inspected) {
     let line = "";
     for (const tab of tabLabels) {
-      if (length(line) + tab.text.length + 3 > width) { prefix.push(line); line = ""; }
+      // Each tab is framed by two columns and follows a two-column gap.
+      if (line && length(line) + tab.text.length + 4 > width) { prefix.push(line); line = ""; }
       line += `${line ? "  " : ""}${paint(tab.active ? "1;30;46" : "2", tab.active ? `[${tab.text}]` : ` ${tab.text} `)}`;
     }
     if (line) prefix.push(line);
@@ -192,7 +220,7 @@ function catalogLines(picker, width, height, suggest) {
     const selected = picker.selected.has(component.id);
     const kind = componentKinds[component.kind];
     const marker = installed ? " ✓ " : selected ? "[✓]" : "[ ]";
-    const title = fit(`${active ? "›" : " "}${marker} ${component.name}`, width).padEnd(width);
+    const title = pad(fit(`${active ? "›" : " "}${marker} ${component.name}`, width), width);
     lines.push(paint(active ? "1;30;46" : installed ? "2" : selected ? "32" : "1", title));
     lines.push(paint("2", fit(` ${component.description}`, width)));
     if (lines.length < height) lines.push(paint(kind.color, fit(` ${kind.name} · ${installed ? "installed" : selected ? "selected" : kind.loading}${suggest(component).pick ? " · ★ suggested" : ""}`, width)));
@@ -253,13 +281,54 @@ function panel(title, content, width, height, color) {
   return lines;
 }
 
-function length(value) { return Array.from(stripVTControlCharacters(value)).length; }
+const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+function graphemes(value) {
+  return Array.from(segmenter.segment(value), ({ segment }) => segment);
+}
+
+// Terminal columns occupied by text, ignoring styling.
+export function displayWidth(value) {
+  return graphemes(stripVTControlCharacters(value)).reduce((sum, grapheme) => sum + graphemeWidth(grapheme), 0);
+}
+
+function graphemeWidth(grapheme) {
+  if (/^[\p{Mn}\p{Me}\p{Cf}\p{Cc}]+$/u.test(grapheme)) return 0;
+  if (/\p{Emoji_Presentation}|\p{Extended_Pictographic}\uFE0F|\p{Regional_Indicator}/u.test(grapheme)) return 2;
+  const code = grapheme.codePointAt(0);
+  return wideRanges.some(([start, end]) => code >= start && code <= end) ? 2 : 1;
+}
+
+// East Asian Wide and Fullwidth blocks; emoji are matched by property above.
+const wideRanges = [
+  [0x1100, 0x115f], [0x2e80, 0x303e], [0x3041, 0x33ff], [0x3400, 0x4dbf], [0x4e00, 0x9fff],
+  [0xa000, 0xa4cf], [0xa960, 0xa97f], [0xac00, 0xd7a3], [0xf900, 0xfaff], [0xfe10, 0xfe19],
+  [0xfe30, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffe6], [0x20000, 0x2fffd], [0x30000, 0x3fffd],
+];
+
+function length(value) { return displayWidth(value); }
+
+function pad(value, width) {
+  return `${value}${" ".repeat(Math.max(0, width - length(value)))}`;
+}
+
+// Takes whole graphemes that fit in the given number of columns.
+function take(value, width) {
+  let used = 0;
+  let result = "";
+  for (const grapheme of graphemes(value)) {
+    used += graphemeWidth(grapheme);
+    if (used > width) break;
+    result += grapheme;
+  }
+  return result;
+}
 
 function fit(value, width) {
   width = Math.max(0, width);
   if (length(value) <= width) return value;
   // Truncated text drops styling so a clipped escape sequence cannot leak.
-  return width ? `${Array.from(stripVTControlCharacters(value)).slice(0, width - 1).join("")}…` : "";
+  return width ? `${take(stripVTControlCharacters(value), width - 1)}…` : "";
 }
 
 function wrap(value, width) {
@@ -268,8 +337,9 @@ function wrap(value, width) {
     let last = lines.length - 1;
     if (lines[last] && length(`${lines[last]} ${word}`) > width) { lines.push(""); last += 1; }
     while (length(word) > width) {
-      lines[last] = Array.from(word).slice(0, width).join("");
-      word = Array.from(word).slice(width).join("");
+      const head = take(word, width) || graphemes(word)[0];
+      lines[last] = head;
+      word = word.slice(head.length);
       lines.push(""); last += 1;
     }
     lines[last] += `${lines[last] ? " " : ""}${word}`;

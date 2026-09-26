@@ -2,29 +2,39 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { commandAvailable } from "./detect.mjs";
-import { integrity, normalizeText, stableJson } from "./integrity.mjs";
+import { decodeText, integrity, normalizeText, stableJson } from "./integrity.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const catalogRoot = path.join(packageRoot, "catalog");
 const catalogPath = path.join(catalogRoot, "catalog.json");
 const remotePackageMaxFiles = 200;
 const remotePackageMaxBytes = 2_000_000;
+const remoteFetchTimeoutMs = 30_000;
 const supportedCatalogAdapters = new Set(["claude", "grok"]);
 const supportedKinds = new Set(["block", "skill", "command", "plugin"]);
 const supportedScopes = new Set(["project", "user"]);
 const supportedLoading = new Set(["always", "on-demand", "explicit", "none"]);
-
-export const retiredComponentIds = new Set([
-  "block/ci-failure-triage",
-  "block/responsive-ui-verification",
-  "skill/ponytail",
-  "hook/slim-cli",
-  "plugin/terraform",
-  "plugin/superpowers",
-  "tool/code-review-graph",
-  "tool/codegraph",
-  "tool/backlog",
-]);
+const componentIdPattern = /^(block|skill|command|plugin)\/[a-z0-9][a-z0-9-]*$/;
+const slugPattern = /^[a-z0-9][a-z0-9-]*$/;
+// Keep these key sets aligned with schemas/catalog.schema.json.
+export const catalogKeys = {
+  document: new Set(["$schema", "catalogVersion", "components"]),
+  component: new Set([
+    "id", "version", "kind", "name", "category", "description", "selection", "outcome",
+    "alwaysOnJustification", "license", "lastVerified", "adapters", "scopes", "recommendedScope",
+    "context", "content", "suggest", "requires", "adapter", "conflictsWith",
+  ]),
+  selection: new Set(["when", "consider", "example"]),
+  context: new Set(["loading", "estimatedTokens"]),
+  bundledContent: new Set(["kind", "path", "root", "upstream", "revision"]),
+  remoteContent: new Set(["kind", "url", "upstream", "root", "overlay", "licensePath", "licenseTarget"]),
+  suggest: new Set(["when", "reason"]),
+  suggestWhen: new Set(["all", "any"]),
+  requires: new Set(["commands"]),
+  adapter: new Set(["claude"]),
+  claudeAdapter: new Set(["pluginId", "marketplace"]),
+  marketplace: new Set(["name", "repo"]),
+};
 
 let cachedCatalog;
 
@@ -34,19 +44,11 @@ export function loadCatalog() {
   if (parsed.catalogVersion !== 2 || !Array.isArray(parsed.components)) {
     throw new Error("Unsupported catalog document");
   }
+  assertKeys(parsed, catalogKeys.document, "catalog document", catalogPath);
   const ids = new Set();
 
-  for (const component of parsed.components ?? []) {
+  for (const component of parsed.components) {
     validateCatalogComponent(component, ids);
-    if (component.content?.kind === "remote" && component.content.root) {
-      const github = parseGitHubRawUrl(component.content.url);
-      const root = normalizeRemotePath(component.content.root, `${component.id} root`);
-      if (!github || github.file !== `${root}/SKILL.md`) {
-        throw new Error(`Remote skill URL must point to its declared root SKILL.md: ${component.id}`);
-      }
-      if (component.content.overlay) readCatalogText(component.content.overlay, component.id);
-    }
-    ids.add(component.id);
   }
 
   cachedCatalog = parsed;
@@ -73,9 +75,6 @@ export function getComponent(id) {
 export function requireComponent(id) {
   const component = getComponent(id);
   if (!component) {
-    if (retiredComponentIds.has(id)) {
-      throw new Error(`Component was retired after catalog review: ${id}. Remove it from existing installations with \`agent-suitup remove ${id}\``);
-    }
     const matches = listComponents()
       .map((candidate) => candidate.id)
       .filter((candidate) => candidate.includes(id));
@@ -133,44 +132,23 @@ export async function resolveRemotePackage(component) {
   if (component.content?.kind !== "remote") {
     throw new Error(`${component.id} does not have remote content`);
   }
-  const github = parseGitHubRawUrl(component.content.url);
-  let resolvedUrl = component.content.url;
-  let revision = null;
-  let treeSha = null;
-  if (component.content.mutable) {
-    if (!github) throw new Error(`Mutable remote source is not pinnable: ${component.id}`);
-    const payload = await fetchGitHubJson(
-      `https://api.github.com/repos/${github.owner}/${github.repository}/commits/${encodeURIComponent(github.ref)}`,
-      component.id,
-    );
-    if (!/^[0-9a-f]{40}$/i.test(payload.sha ?? "")) {
-      throw new Error(`Failed to resolve an immutable revision for ${component.id}`);
-    }
-    revision = payload.sha;
-    treeSha = payload.commit?.tree?.sha ?? revision;
-    resolvedUrl = `https://raw.githubusercontent.com/${github.owner}/${github.repository}/${revision}/${github.file}`;
-  }
+  // Catalog validation pins every remote source to an immutable revision, so
+  // content changes only when the catalog deliberately bumps it.
+  const { url, upstream } = component.content;
+  const github = parseGitHubRawUrl(url);
+  const source = { kind: "remote", url, resolvedUrl: url, revision: github.ref, upstream };
 
   if (!component.content.root) {
-    const content = await fetchRemoteText(resolvedUrl, component.id);
-    return {
-      files: [{ path: "SKILL.md", content, mode: 0o644 }],
-      source: {
-        kind: "remote",
-        url: component.content.url,
-        resolvedUrl,
-        revision,
-        upstream: component.content.upstream,
-        mutable: Boolean(component.content.mutable),
-      },
-    };
+    const files = applyRemoteOverlay(component, [
+      { path: "SKILL.md", content: await fetchRemoteFile(url, component.id), mode: 0o644 },
+    ]);
+    skillFile({ files }, component.id);
+    return { files, source };
   }
 
-  if (!github) throw new Error(`Remote directory source is not a GitHub raw URL: ${component.id}`);
   const root = normalizeRemotePath(component.content.root, `${component.id} root`);
-  const pinnedRevision = revision ?? github.ref;
   const tree = await fetchGitHubJson(
-    `https://api.github.com/repos/${github.owner}/${github.repository}/git/trees/${encodeURIComponent(treeSha ?? pinnedRevision)}?recursive=1`,
+    `https://api.github.com/repos/${github.owner}/${github.repository}/git/trees/${github.ref}?recursive=1`,
     component.id,
   );
   if (tree.truncated) throw new Error(`Remote tree is truncated: ${component.id}`);
@@ -179,7 +157,7 @@ export async function resolveRemotePackage(component) {
     .filter((entry) => entry.type === "blob" && entry.path.startsWith(`${root}/`))
     .map((entry) => ({
       path: normalizePackagePath(entry.path.slice(root.length + 1), component.id),
-      resolvedUrl: `https://raw.githubusercontent.com/${github.owner}/${github.repository}/${pinnedRevision}/${entry.path}`,
+      resolvedUrl: `https://raw.githubusercontent.com/${github.owner}/${github.repository}/${github.ref}/${entry.path}`,
       mode: entry.mode === "100755" ? 0o755 : 0o644,
       size: entry.size ?? 0,
     }));
@@ -190,7 +168,7 @@ export async function resolveRemotePackage(component) {
     if (!treeEntry) throw new Error(`Remote license file not found: ${component.id}`);
     descriptors.push({
       path: normalizePackagePath(component.content.licenseTarget ?? "LICENSE", component.id),
-      resolvedUrl: `https://raw.githubusercontent.com/${github.owner}/${github.repository}/${pinnedRevision}/${licensePath}`,
+      resolvedUrl: `https://raw.githubusercontent.com/${github.owner}/${github.repository}/${github.ref}/${licensePath}`,
       mode: 0o644,
       size: treeEntry.size ?? 0,
     });
@@ -204,13 +182,8 @@ export async function resolveRemotePackage(component) {
   return {
     files,
     source: {
-      kind: "remote",
-      url: component.content.url,
-      resolvedUrl,
-      revision,
+      ...source,
       root,
-      upstream: component.content.upstream,
-      mutable: Boolean(component.content.mutable),
       resolvedFiles: descriptors.map((descriptor, index) => ({
         path: descriptor.path,
         resolvedUrl: descriptor.resolvedUrl,
@@ -236,35 +209,42 @@ export async function lockedRemotePackage(componentOrId, source) {
     return { files: component ? applyRemoteOverlay(component, files) : files, source };
   }
   if (!source?.resolvedUrl) throw new Error(`Lockfile does not pin ${componentId}; run update to repair it`);
-  const content = await fetchRemoteText(source.resolvedUrl, componentId);
+  const content = await fetchRemoteFile(source.resolvedUrl, componentId);
   const files = [{ path: "SKILL.md", content, mode: 0o644 }];
   return { files: component ? applyRemoteOverlay(component, files) : files, source };
 }
 
-async function fetchRemoteText(url, componentId) {
-  const response = await fetch(url, {
-    headers: { "user-agent": "agent-suitup" },
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${componentId}: HTTP ${response.status}`);
-  }
-  return normalizeText(await response.text());
+// Text is normalized like bundled content; other files keep their exact bytes.
+async function fetchRemoteFile(url, componentId) {
+  const bytes = await fetchRemote(url, componentId, { action: "fetch" });
+  const text = decodeText(bytes);
+  return text === null ? bytes : normalizeText(text);
 }
 
 async function fetchGitHubJson(url, componentId) {
-  const response = await fetch(url, {
-    headers: {
-      accept: "application/vnd.github+json",
-      "user-agent": "agent-suitup",
-    },
-  });
-  if (!response.ok) throw new Error(`Failed to resolve ${componentId}: HTTP ${response.status}`);
-  return response.json();
+  const bytes = await fetchRemote(url, componentId, { action: "resolve", accept: "application/vnd.github+json" });
+  return JSON.parse(bytes.toString("utf8"));
+}
+
+async function fetchRemote(url, label, { action, accept }) {
+  try {
+    const response = await fetch(url, {
+      headers: { "user-agent": "agent-suitup", ...(accept ? { accept } : {}) },
+      signal: AbortSignal.timeout(remoteFetchTimeoutMs),
+    });
+    if (!response.ok) throw new Error(`Failed to ${action} ${label}: HTTP ${response.status}`);
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    if (error?.name === "TimeoutError") {
+      throw new Error(`Timed out after ${remoteFetchTimeoutMs / 1000} seconds while trying to ${action} ${label}`);
+    }
+    throw error;
+  }
 }
 
 async function fetchResolvedFiles(descriptors, componentId, { verify = false } = {}) {
   const files = await Promise.all(descriptors.map(async (descriptor) => {
-    const content = await fetchRemoteText(descriptor.resolvedUrl, `${componentId}/${descriptor.path}`);
+    const content = await fetchRemoteFile(descriptor.resolvedUrl, `${componentId}/${descriptor.path}`);
     if (verify && descriptor.integrity && integrity(content) !== descriptor.integrity) {
       throw new Error(`Pinned remote file failed its checksum: ${componentId}/${descriptor.path}`);
     }
@@ -309,6 +289,7 @@ function insertSkillOverlay(content, overlay, componentId) {
 function skillFile(remotePackage, componentId) {
   const file = remotePackage.files.find((candidate) => candidate.path === "SKILL.md");
   if (!file) throw new Error(`Remote package has no SKILL.md: ${componentId}`);
+  if (typeof file.content !== "string") throw new Error(`Remote SKILL.md is not text: ${componentId}`);
   return file;
 }
 
@@ -322,8 +303,7 @@ function readCatalogText(relative, componentId) {
 
 function resolveBundledPath(relative, componentId) {
   const sourcePath = path.resolve(catalogRoot, relative);
-  const allowedRoots = [catalogRoot, path.join(packageRoot, "adapters")];
-  if (!allowedRoots.some((root) => sourcePath === root || sourcePath.startsWith(`${root}${path.sep}`))) {
+  if (sourcePath !== catalogRoot && !sourcePath.startsWith(`${catalogRoot}${path.sep}`)) {
     throw new Error(`Bundled content escapes the package: ${componentId}`);
   }
   return sourcePath;
@@ -439,23 +419,30 @@ export function validateCatalogComponent(component, ids = new Set()) {
   if (!component || typeof component !== "object" || !component.id || ids.has(component.id)) {
     throw new Error(`Invalid or duplicate catalog component: ${id}`);
   }
+  assertKeys(component, catalogKeys.component, "catalog component", id);
   if (!supportedKinds.has(component.kind) || !component.id.startsWith(`${component.kind}/`)) {
     throw new Error(`Catalog kind and ID disagree: ${component.id}`);
   }
-  if (!/^(block|skill|command|plugin)\/[a-z0-9][a-z0-9-]*$/.test(component.id)) {
+  if (!componentIdPattern.test(component.id)) {
     throw new Error(`Invalid catalog component ID: ${component.id}`);
   }
   if (!/^\d+\.\d+\.\d+$/.test(component.version ?? "")) {
     throw new Error(`Invalid catalog component version: ${component.id}`);
   }
   for (const field of ["name", "category", "description"]) {
-    if (typeof component[field] !== "string" || !component[field].trim()) {
+    if (!isText(component[field])) {
       throw new Error(`Catalog component must declare ${field}: ${component.id}`);
     }
   }
+  for (const field of ["outcome", "alwaysOnJustification", "license"]) {
+    if (component[field] !== undefined && !isText(component[field])) {
+      throw new Error(`Catalog component ${field} must be nonempty text: ${component.id}`);
+    }
+  }
   if (component.selection !== undefined) {
+    assertKeys(component.selection, catalogKeys.selection, "selection guide", id);
     for (const field of ["when", "consider", "example"]) {
-      if (typeof component.selection?.[field] !== "string" || !component.selection[field].trim()) {
+      if (!isText(component.selection[field])) {
         throw new Error(`Catalog selection guide must declare ${field}: ${component.id}`);
       }
     }
@@ -465,11 +452,8 @@ export function validateCatalogComponent(component, ids = new Set()) {
     || component.scopes.some((scope) => !supportedScopes.has(scope))) {
     throw new Error(`Invalid scopes for catalog component: ${component.id}`);
   }
-  if (component.recommendedScope && !component.scopes.includes(component.recommendedScope)) {
+  if (component.recommendedScope !== undefined && !component.scopes.includes(component.recommendedScope)) {
     throw new Error(`Recommended scope is not supported: ${component.id}`);
-  }
-  if (Object.hasOwn(component, "targets")) {
-    throw new Error(`Catalog component uses legacy target metadata: ${component.id}`);
   }
   validateAdapters(component);
   validateContext(component);
@@ -480,7 +464,7 @@ export function validateCatalogComponent(component, ids = new Set()) {
     && (!Array.isArray(component.conflictsWith)
       || new Set(component.conflictsWith).size !== component.conflictsWith.length
       || component.conflictsWith.includes(component.id)
-      || component.conflictsWith.some((id) => !/^(block|skill|command|plugin)\/[a-z0-9][a-z0-9-]*$/.test(id)))) {
+      || component.conflictsWith.some((other) => !componentIdPattern.test(other)))) {
     throw new Error(`Invalid component conflicts: ${component.id}`);
   }
   if (component.kind === "block") {
@@ -491,7 +475,7 @@ export function validateCatalogComponent(component, ids = new Set()) {
       throw new Error(`Instruction block must always load: ${component.id}`);
     }
     for (const field of ["outcome", "alwaysOnJustification"]) {
-      if (typeof component[field] !== "string" || !component[field].trim()) {
+      if (!isText(component[field])) {
         throw new Error(`Instruction block must declare ${field}: ${component.id}`);
       }
     }
@@ -500,10 +484,7 @@ export function validateCatalogComponent(component, ids = new Set()) {
     }
   }
   if (component.kind === "plugin") {
-    const claude = component.adapter?.claude;
-    if (!claude?.pluginId || !claude.marketplace?.name || !claude.marketplace?.repo) {
-      throw new Error(`Claude plugin metadata is incomplete: ${component.id}`);
-    }
+    validatePluginAdapter(component);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(component.lastVerified ?? "")) {
       throw new Error(`Plugin must declare lastVerified: ${component.id}`);
     }
@@ -520,9 +501,24 @@ export function validateCatalogComponent(component, ids = new Set()) {
   return component;
 }
 
+function validatePluginAdapter(component) {
+  const claude = component.adapter?.claude;
+  if (!claude?.pluginId || !claude.marketplace?.name || !claude.marketplace?.repo) {
+    throw new Error(`Claude plugin metadata is incomplete: ${component.id}`);
+  }
+  assertKeys(component.adapter, catalogKeys.adapter, "plugin adapter", component.id);
+  assertKeys(claude, catalogKeys.claudeAdapter, "Claude plugin adapter", component.id);
+  assertKeys(claude.marketplace, catalogKeys.marketplace, "Claude marketplace", component.id);
+  if (!slugPattern.test(claude.pluginId) || !slugPattern.test(claude.marketplace.name)
+    || !/^[^/]+\/[^/]+$/.test(claude.marketplace.repo)) {
+    throw new Error(`Invalid Claude plugin metadata: ${component.id}`);
+  }
+}
+
 function validateAdapters(component) {
   if (component.adapters && (!Array.isArray(component.adapters)
     || !component.adapters.length
+    || new Set(component.adapters).size !== component.adapters.length
     || component.adapters.some((adapter) => !supportedCatalogAdapters.has(adapter)))) {
     throw new Error(`Invalid adapters for catalog component: ${component.id}`);
   }
@@ -535,6 +531,9 @@ function validateAdapters(component) {
 }
 
 function validateContext(component) {
+  if (component.context !== undefined) {
+    assertKeys(component.context, catalogKeys.context, "context", component.id);
+  }
   if (new Set(["block", "skill", "command"]).has(component.kind)) {
     if (!component.context || !supportedLoading.has(component.context.loading)) {
       throw new Error(`Component must declare a valid context loading mode: ${component.id}`);
@@ -554,47 +553,80 @@ function validateContext(component) {
 }
 
 function validateContent(component) {
+  const { content } = component;
   if (new Set(["block", "skill", "command"]).has(component.kind)
-    && !new Set(["bundled", "remote"]).has(component.content?.kind)) {
+    && !new Set(["bundled", "remote"]).has(content?.kind)) {
     throw new Error(`Component must declare bundled or remote content: ${component.id}`);
   }
-  if (component.content?.kind === "bundled" && !component.content.path) {
+  if (content === undefined) return;
+  assertKeys(content, content.kind === "remote" ? catalogKeys.remoteContent : catalogKeys.bundledContent,
+    "content", component.id);
+  for (const field of ["path", "root", "upstream", "overlay", "licensePath", "licenseTarget"]) {
+    if (content[field] !== undefined && !isText(content[field])) {
+      throw new Error(`Invalid content ${field}: ${component.id}`);
+    }
+  }
+  if (content.kind === "bundled" && !content.path) {
     throw new Error(`Bundled component must declare a path: ${component.id}`);
   }
-  if (component.content?.kind === "remote"
-    && (!component.content.url || !component.content.upstream)) {
-    throw new Error(`Remote component source is incomplete: ${component.id}`);
-  }
-  if (component.content?.revision && !/^[0-9a-f]{40}$/i.test(component.content.revision)) {
+  if (content.kind === "remote") validateRemoteSource(component);
+  if (content.revision !== undefined && !/^[0-9a-f]{40}$/i.test(content.revision)) {
     throw new Error(`Bundled attribution revision must be immutable: ${component.id}`);
   }
-  if (component.content?.upstream && !component.license) {
-    throw new Error(`Attributed content must declare a license: ${component.id}`);
+  if (!component.license) {
+    throw new Error(`Component content must declare a license: ${component.id}`);
   }
+}
+
+function validateRemoteSource(component) {
+  const { url, upstream, root, overlay } = component.content;
+  if (!url || !upstream) throw new Error(`Remote component source is incomplete: ${component.id}`);
+  const github = parseGitHubRawUrl(url);
+  if (!github || !/^[0-9a-f]{40}$/i.test(github.ref)) {
+    throw new Error(`Remote content must be pinned to an immutable GitHub revision: ${component.id}`);
+  }
+  if (root !== undefined && github.file !== `${normalizeRemotePath(root, `${component.id} root`)}/SKILL.md`) {
+    throw new Error(`Remote skill URL must point to its declared root SKILL.md: ${component.id}`);
+  }
+  if (overlay !== undefined) readCatalogText(overlay, component.id);
 }
 
 function validateSuggestion(component) {
   if (!component.suggest) return;
+  assertKeys(component.suggest, catalogKeys.suggest, "suggestion", component.id);
   const { when, reason } = component.suggest;
   const ruleKeys = Object.keys(when ?? {});
   if (!when || typeof when !== "object" || Array.isArray(when)
     || (!Array.isArray(when.all) && !Array.isArray(when.any))
-    || ruleKeys.some((key) => !new Set(["all", "any"]).has(key))
+    || ruleKeys.some((key) => !catalogKeys.suggestWhen.has(key))
     || [when.all, when.any].filter(Boolean).some((signals) => !signals.length
       || new Set(signals).size !== signals.length)
     || [...(when.all ?? []), ...(when.any ?? [])].some((signal) => typeof signal !== "string" || !signal)
-    || typeof reason !== "string" || !reason.trim()) {
+    || !isText(reason)) {
     throw new Error(`Invalid suggestion rule: ${component.id}`);
   }
 }
 
 function validateRequirements(component) {
   if (!component.requires) return;
+  assertKeys(component.requires, catalogKeys.requires, "requirements", component.id);
   const commands = component.requires.commands;
-  if (!Array.isArray(commands) || !commands.length
+  if (!Array.isArray(commands) || !commands.length || new Set(commands).size !== commands.length
     || commands.some((command) => typeof command !== "string" || !/^[a-zA-Z0-9._-]+$/.test(command))) {
     throw new Error(`Invalid command prerequisites: ${component.id}`);
   }
+}
+
+function assertKeys(value, allowed, label, id) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Invalid ${label}: ${id}`);
+  }
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`Unknown ${label} field ${unknown.join(", ")}: ${id}`);
+}
+
+function isText(value) {
+  return typeof value === "string" && Boolean(value.trim());
 }
 
 export { catalogPath, catalogRoot, packageRoot };

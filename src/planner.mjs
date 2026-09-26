@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { integrity } from "./integrity.mjs";
+import { decodeText, integrity, sameContent } from "./integrity.mjs";
 import { portablePath } from "./paths.mjs";
 import { statePaths } from "./state.mjs";
 
@@ -13,6 +13,7 @@ export class Planner {
     this.force = force;
     this.changes = new Map();
     this.virtual = new Map();
+    this.pruneBoundaries = new Map();
     this.notes = [];
   }
 
@@ -30,7 +31,7 @@ export class Planner {
     const absolute = path.resolve(file);
     const current = this.state(absolute);
     const mode = targetMode(current, options.mode);
-    if (current.kind === "file" && current.content === content && (current.mode & 0o777) === mode) return;
+    if (current.kind === "file" && sameContent(current.content, content) && (current.mode & 0o777) === mode) return;
 
     if (current.kind !== "missing" && current.kind !== "file") {
       throw new ConflictError(`Cannot write ${this.label(absolute)}: it is a ${current.kind}`);
@@ -83,6 +84,7 @@ export class Planner {
       throw new ConflictError(`Managed symlink drifted: ${this.label(absolute)}`);
     }
     this.setChange(absolute, { kind: "missing" }, current);
+    if (options.pruneBelow) this.pruneBoundaries.set(absolute, path.resolve(options.pruneBelow));
   }
 
   note(message) {
@@ -141,6 +143,10 @@ export class Planner {
         fs.unlinkSync(operation.path);
       }
     }
+    for (const operation of operations) {
+      const boundary = this.pruneBoundaries.get(operation.path);
+      if (boundary && operation.after.kind === "missing") removeEmptyParents(operation.path, boundary);
+    }
   }
 
   assertOwnedFile(current, absolute, options) {
@@ -178,6 +184,18 @@ function targetMode(current, requested) {
   const existing = current.mode & 0o777;
   if (requested === undefined) return existing;
   return requested & 0o111 ? existing | ((existing & 0o444) >> 2) : existing & ~0o111;
+}
+
+// Removes directories a deletion left empty, stopping at the first directory
+// that still has content and never touching the boundary itself.
+function removeEmptyParents(file, boundary) {
+  for (let directory = path.dirname(file); directory.startsWith(`${boundary}${path.sep}`); directory = path.dirname(directory)) {
+    try {
+      fs.rmdirSync(directory);
+    } catch {
+      return;
+    }
+  }
 }
 
 function ancestors(file) {
@@ -219,7 +237,10 @@ function formatOperation(operation) {
   }
   const modeChange = before.kind === "file" && (before.mode & 0o777) !== (after.mode & 0o777)
     ? ` (mode ${octal(before.mode)} -> ${octal(after.mode)})` : "";
-  const diff = before.content === after.content ? [] : compactDiff(before.content ?? "", after.content);
+  const diff = sameContent(before.content ?? "", after.content) ? []
+    : typeof before.content === "string" && typeof after.content === "string"
+      ? compactDiff(before.content, after.content)
+      : [...prefixLines(before.content ?? "", "-"), ...prefixLines(after.content, "+")];
   return [`UPDATE ${label}${modeChange}`, ...diff].join("\n");
 }
 
@@ -245,6 +266,7 @@ function compactDiff(before, after) {
 }
 
 function prefixLines(content, prefix) {
+  if (typeof content !== "string") return [`${prefix}(binary content, ${content.length} bytes)`];
   return content.split("\n").map((line) => `${prefix}${line}`);
 }
 
@@ -252,7 +274,10 @@ function readState(file) {
   try {
     const stat = fs.lstatSync(file);
     if (stat.isSymbolicLink()) return { kind: "symlink", target: fs.readlinkSync(file) };
-    if (stat.isFile()) return { kind: "file", content: fs.readFileSync(file, "utf8"), mode: stat.mode };
+    if (stat.isFile()) {
+      const bytes = fs.readFileSync(file);
+      return { kind: "file", content: decodeText(bytes) ?? bytes, mode: stat.mode };
+    }
     if (stat.isDirectory()) return { kind: "directory" };
     return { kind: "other" };
   } catch (error) {
@@ -265,7 +290,7 @@ function sameState(left, right) {
   if (left.kind !== right.kind) return false;
   if (left.kind === "missing") return true;
   if (left.kind === "file") {
-    return left.content === right.content && (left.mode & 0o777) === (right.mode & 0o777);
+    return sameContent(left.content, right.content) && (left.mode & 0o777) === (right.mode & 0o777);
   }
   if (left.kind === "symlink") return left.target === right.target;
   return false;

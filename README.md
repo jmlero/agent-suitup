@@ -29,8 +29,9 @@ Nothing is preselected. Skills can be installed on their own.
 
 - **Tab**, **Shift+Tab**, **← / →**, or **1–5** switches categories. **↑ / ↓**
   browses, **Space** selects, and **Enter** continues.
-- **/** to search; Enter keeps the filter and Esc clears it. Selections survive
-  filtering. **a** toggles all visible items; **n** clears the selection.
+- **/** to search; Enter keeps the filter and Esc clears it. Pasted text goes to
+  the search, so it never triggers shortcuts. Selections survive filtering. **a**
+  toggles all visible items; **n** clears the selection.
 - A detail panel explains what each item does and when it fits. **i** opens its
   full guide: example, tradeoffs, loading cost, install path, and usage. Scroll
   with arrows or Page Up / Page Down; Enter or Esc returns to the catalog.
@@ -115,9 +116,12 @@ agent-suitup add skill/debug-issue skill/database-migration
 ```
 
 FastAPI and Terraform skills are downloaded when preparing a selected
-installation, pinned to immutable revisions, and include upstream references and
-licenses. Browsing and `inspect` do not download them. Skill bodies load on demand;
-agents may keep their discovery metadata in context.
+installation and include upstream references and licenses. The catalog pins each
+one to a reviewed upstream revision, so `update` installs new upstream content
+only after a catalog release deliberately moves that pin. Binary files keep their
+exact bytes, and downloads time out after 30 seconds. Browsing and `inspect` do
+not download them. Skill bodies load on demand; agents may keep their discovery
+metadata in context.
 
 Explicit commands provide verification and commit workflows. Install with, for
 example, `agent-suitup add command/verify-work`.
@@ -153,6 +157,12 @@ needed:
 | `plugin/pyright-lsp` | Python type checking | `pyright-langserver` on `PATH` |
 | `plugin/codex` | Delegation and review through the Codex CLI | `codex` on `PATH` |
 
+A plugin is enabled in the Claude settings file for its scope:
+`.claude/settings.json` for a project or `~/.claude/settings.json` for your user.
+The same file registers the plugin's marketplace under `extraKnownMarketplaces`
+when it is missing. Removing the last plugin that uses a marketplace entry
+agent-suitup added also removes that entry; entries you added are kept.
+
 Required executables are checked before settings are changed. If an installed
 plugin's executable later goes missing, `doctor` reports it and other commands
 continue. Authentication and runtime setup remain separate from installation.
@@ -169,19 +179,19 @@ list such as `claude,grok`, or `none` for portable content only. With `list`,
 `init`, and `add --interactive`, it limits the catalog to components that work
 with those adapters.
 
-A `--adapter` flag sets the project's complete adapter set. Without the flag,
-existing adapters are kept, and choosing an agent at the setup prompt only adds
-adapters. To remove an adapter, re-add an installed component with the adapters
-to keep. agent-suitup removes the files it created for the dropped adapter;
-canonical content stays in place:
+`init` and `add` only add adapters: existing adapters are always kept, whether
+you pass `--adapter` or choose an agent at the setup prompt. `--adapter none`
+adds nothing and does not enable adapters that components would otherwise
+require. To drop an adapter, use `remove --adapter`. agent-suitup removes the
+files it created for that adapter; canonical content stays in place:
 
 ```bash
-agent-suitup add block/tdd --adapter grok --dry-run
-agent-suitup add block/tdd --adapter grok
+agent-suitup remove --adapter grok --dry-run
+agent-suitup remove --adapter grok
 ```
 
-`--adapter none` drops every adapter. Remove Claude plugins first, because they
-require the `claude` adapter.
+Claude plugins require the `claude` adapter. Remove them first, or in the same
+command: `agent-suitup remove plugin/github --adapter claude`.
 
 ## Manage an installation
 
@@ -193,6 +203,7 @@ require the `claude` adapter.
 | `plan` | Preview reconciliation of the existing installation |
 | `update` | Apply updates and repair missing content |
 | `remove <component...>` | Remove selected managed components |
+| `remove --adapter <adapter>` | Drop an adapter and the files it added |
 | `doctor` | Check drift and known prerequisites without writing |
 
 Prefix commands with `agent-suitup`. Skills and commands support
@@ -205,7 +216,8 @@ these files in version control alongside the installed content.
 
 Text outside managed blocks is preserved, and so are existing file permissions.
 Removal deletes only files agent-suitup created; identical files that existed
-before installation are kept and reported. Local edits and unexpected file or
+before installation are kept and reported. Skill directories left empty by a
+removal are deleted; directories that still hold other files are kept. Local edits and unexpected file or
 symlink replacements are reported as conflicts. Review `--force --dry-run`
 before using `--force` to resolve destructive cleanup; directories are preserved
 and symlink targets are not followed during deletion.
@@ -231,6 +243,10 @@ node bin/agent-suitup.mjs --help
 npm test
 npm run check
 ```
+
+`npm run check` syntax-checks every module in `bin/` and `src/`, then runs the
+tests. CI runs it on Node.js 20, 22, and current across Linux, macOS, and
+Windows.
 
 Licensed under [Apache-2.0](LICENSE). Adapted content retains its upstream
 licenses and attribution in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

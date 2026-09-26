@@ -4,7 +4,7 @@
   "components": [
     {
       "id": "block/tdd",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "block",
       "name": "Test-driven development",
       "category": "Development methodology",
@@ -18,11 +18,12 @@
       "alwaysOnJustification": "The agreement changes implementation order throughout feature and bug-fix work.",
       "scopes": ["project"],
       "content": { "kind": "bundled", "path": "blocks/tdd.md" },
+      "license": "Apache-2.0",
       "context": { "loading": "always" }
     },
     {
       "id": "block/ponytail",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "block",
       "name": "Minimal implementation",
       "category": "Development methodology",
@@ -46,7 +47,7 @@
     },
     {
       "id": "block/completion-evidence",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "block",
       "name": "Completion evidence",
       "category": "Verification",
@@ -70,7 +71,7 @@
     },
     {
       "id": "block/transparent-shortcuts",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "block",
       "name": "Transparent shortcuts",
       "category": "Delivery safety",
@@ -94,7 +95,7 @@
     },
     {
       "id": "block/secure-defaults",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "block",
       "name": "Secure defaults",
       "category": "Security",
@@ -118,7 +119,7 @@
     },
     {
       "id": "block/ci-production-parity",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "block",
       "name": "CI and production parity",
       "category": "Verification",
@@ -198,6 +199,7 @@
       },
       "scopes": ["project", "user"],
       "content": { "kind": "bundled", "path": "skills/audit-code/SKILL.md" },
+      "license": "Apache-2.0",
       "context": { "loading": "on-demand" }
     },
     {
@@ -214,6 +216,7 @@
       },
       "scopes": ["project", "user"],
       "content": { "kind": "bundled", "path": "skills/audit-docs/SKILL.md" },
+      "license": "Apache-2.0",
       "context": { "loading": "on-demand" },
       "suggest": { "when": { "all": ["hasDocs"] }, "reason": "documentation detected" }
     },
@@ -231,6 +234,7 @@
       },
       "scopes": ["project", "user"],
       "content": { "kind": "bundled", "path": "skills/review-pr/SKILL.md" },
+      "license": "Apache-2.0",
       "context": { "loading": "on-demand" }
     },
     {
@@ -274,15 +278,14 @@
       "scopes": ["project", "user"],
       "content": {
         "kind": "remote",
-        "url": "https://raw.githubusercontent.com/antonbabenko/terraform-skill/master/skills/terraform-skill/SKILL.md",
+        "url": "https://raw.githubusercontent.com/antonbabenko/terraform-skill/0a3a4a66e99001347d36a41e10260a825be3ab62/skills/terraform-skill/SKILL.md",
         "upstream": "antonbabenko/terraform-skill",
         "root": "skills/terraform-skill",
         "overlay": "overlays/terraform-skill.md",
-        "licensePath": "LICENSE",
-        "mutable": true
+        "licensePath": "LICENSE"
       },
       "license": "Apache-2.0",
-      "context": { "loading": "on-demand", "estimatedTokens": 5200 },
+      "context": { "loading": "on-demand", "estimatedTokens": 5300 },
       "suggest": { "when": { "all": ["hasTerraform"] }, "reason": "Terraform detected" }
     },
     {
@@ -300,12 +303,11 @@
       "scopes": ["project", "user"],
       "content": {
         "kind": "remote",
-        "url": "https://raw.githubusercontent.com/fastapi/fastapi/master/fastapi/.agents/skills/fastapi/SKILL.md",
+        "url": "https://raw.githubusercontent.com/fastapi/fastapi/192b12197eb04c2b4a691cce7d87261b21716714/fastapi/.agents/skills/fastapi/SKILL.md",
         "upstream": "fastapi/fastapi",
         "root": "fastapi/.agents/skills/fastapi",
         "overlay": "overlays/fastapi.md",
-        "licensePath": "LICENSE",
-        "mutable": true
+        "licensePath": "LICENSE"
       },
       "license": "MIT",
       "context": { "loading": "on-demand", "estimatedTokens": 2700 },
@@ -361,8 +363,11 @@
       "content": {
         "kind": "bundled",
         "path": "commands/verify-work/SKILL.md",
-        "root": "commands/verify-work"
+        "root": "commands/verify-work",
+        "upstream": "jmlero/app-meerkat",
+        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
       },
+      "license": "Apache-2.0",
       "context": { "loading": "explicit" }
     },
     {
@@ -383,6 +388,7 @@
         "path": "commands/commit-work/SKILL.md",
         "root": "commands/commit-work"
       },
+      "license": "Apache-2.0",
       "context": { "loading": "explicit" }
     },
     {

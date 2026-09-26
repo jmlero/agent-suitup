@@ -17,7 +17,6 @@ import {
   lockedRemotePackage,
   remoteContent,
   resolveRemotePackage,
-  retiredComponentIds,
   suggested,
   validateCatalogComponent,
 } from "../src/catalog.mjs";
@@ -58,7 +57,6 @@ test("catalog contains the reviewed block-first component set", () => {
     "plugin/codex",
   ]) assert.ok(ids.includes(id), id);
 
-  assert.ok([...retiredComponentIds].every((id) => !ids.includes(id)));
   for (const component of components) {
     assert.match(component.version, /^\d+\.\d+\.\d+$/);
     assert.ok(component.scopes.length);
@@ -104,6 +102,11 @@ test("selection guides explain every component and browsing never fetches remote
     const guide = componentGuide(component, { scope: "user", adapters: ["claude"] });
     if (component.kind === "block") assert.equal(guide.destination, "./AGENTS.md");
     else assert.ok(guide.destination.startsWith("~/"));
+    if (component.kind === "plugin") {
+      assert.equal(guide.destination, "~/.claude/settings.json (enabledPlugins and extraKnownMarketplaces)");
+      assert.equal(componentGuide(component).destination,
+        "./.claude/settings.json (enabledPlugins and extraKnownMarketplaces)");
+    }
     if (component.kind === "skill") {
       assert.match(guide.sections.find(([title]) => title === "Loading")[1], /On demand/);
       assert.match(guide.sections.find(([title]) => title === "Agent setup")[1], /~\/\.claude\/skills/);
@@ -214,6 +217,20 @@ test("App Meerkat guidance is routed between compact blocks and on-demand workfl
   );
 });
 
+test("blocks agree on verification wording and where deferred work is recorded", () => {
+  const text = (id) => bundledContent(listComponents().find((component) => component.id === id));
+  assert.match(text("block/tdd"), /repeat this cycle until\s+the requirements are met/);
+  assert.match(text("block/tdd"), /Refactor the code\s+you touched/);
+  for (const id of ["block/tdd", "block/ponytail", "block/completion-evidence", "block/ci-production-parity"]) {
+    assert.match(text(id), /relevant\s+checks/, id);
+  }
+  for (const id of ["block/completion-evidence", "block/ci-production-parity"]) assert.match(text(id), /skipped/, id);
+  for (const id of ["block/transparent-shortcuts", "block/secure-defaults"]) {
+    assert.match(text(id), /normal task system, or in\s+your handoff when there is none/, id);
+  }
+  assert.match(text("block/ponytail"), /Adapted from DietrichGebert\/ponytail \(MIT License\)\.\n$/);
+});
+
 test("workflow commands are complete, explicitly invoked Agent Skill packages", () => {
   for (const id of ["command/verify-work", "command/commit-work"]) {
     const component = listComponents().find((candidate) => candidate.id === id);
@@ -243,7 +260,7 @@ test("portable components are vendor-neutral and integrations are Claude-only", 
 
   assert.ok(portable.some(({ id }) => id === "block/tdd"));
   assert.ok(portable.some(({ id }) => id === "skill/audit-code"));
-  assert.ok(portable.every(({ kind }) => kind !== "plugin" && kind !== "hook"));
+  assert.ok(portable.every(({ kind }) => kind !== "plugin"));
   assert.ok(portable.every((component) => component.adapters === undefined));
   assert.equal(claude.length, components.length);
   assert.equal(grok.length, portable.length);
@@ -300,45 +317,34 @@ test("current marketplace mappings are explicit, verified, and non-overlapping",
     marketplace: { name: "openai-codex", repo: "openai/codex-plugin-cc" },
   });
   assert.ok(Object.values(plugins).every(({ lastVerified }) => lastVerified === "2026-08-15"));
-  assert.equal(plugins["plugin/terraform"], undefined);
-  assert.equal(plugins["plugin/superpowers"], undefined);
 });
 
 test("remote skill directories are pinned, normalized, checksummed, and complete", async (context) => {
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
-  const revision = "0123456789abcdef0123456789abcdef01234567";
-  const treeSha = "89abcdef0123456789abcdef0123456789abcdef";
+  const component = listComponents().find(({ id }) => id === "skill/fastapi");
+  const revision = /\/([0-9a-f]{40})\//.exec(component.content.url)[1];
   const requested = [];
   globalThis.fetch = async (url) => {
     const value = String(url);
     requested.push(value);
-    if (value.includes("/commits/")) {
-      return { ok: true, json: async () => ({ sha: revision, commit: { tree: { sha: treeSha } } }) };
-    }
     if (value.includes("/git/trees/")) {
-      return {
-        ok: true,
-        json: async () => ({
-          truncated: false,
-          tree: [
-            { path: "fastapi/.agents/skills/fastapi/SKILL.md", type: "blob", mode: "100644", size: 80 },
-            { path: "fastapi/.agents/skills/fastapi/references/dependencies.md", type: "blob", mode: "100644", size: 20 },
-            { path: "LICENSE", type: "blob", mode: "100644", size: 10 },
-          ],
-        }),
-      };
+      return response(JSON.stringify({
+        truncated: false,
+        tree: [
+          { path: "fastapi/.agents/skills/fastapi/SKILL.md", type: "blob", mode: "100644", size: 80 },
+          { path: "fastapi/.agents/skills/fastapi/references/dependencies.md", type: "blob", mode: "100644", size: 20 },
+          { path: "LICENSE", type: "blob", mode: "100644", size: 10 },
+        ],
+      }));
     }
     if (value.endsWith("/SKILL.md")) {
-      return { ok: true, text: async () => "---\r\nname: fastapi\r\ndescription: Remote skill.\r\n---\r\n\r\n# FastAPI\r\n" };
+      return response("---\r\nname: fastapi\r\ndescription: Remote skill.\r\n---\r\n\r\n# FastAPI\r\n");
     }
-    if (value.endsWith("/references/dependencies.md")) {
-      return { ok: true, text: async () => "# Dependencies\r\n" };
-    }
-    if (value.endsWith("/LICENSE")) return { ok: true, text: async () => "MIT License\r\n" };
+    if (value.endsWith("/references/dependencies.md")) return response("# Dependencies\r\n");
+    if (value.endsWith("/LICENSE")) return response("MIT License\r\n");
     return { ok: false, status: 404 };
   };
-  const component = listComponents().find(({ id }) => id === "skill/fastapi");
   const resolved = await resolveRemotePackage(component);
   assert.deepEqual(resolved.files.map(({ path: file }) => file), [
     "LICENSE",
@@ -350,7 +356,8 @@ test("remote skill directories are pinned, normalized, checksummed, and complete
   assert.equal(resolved.source.revision, revision);
   assert.equal(resolved.source.resolvedFiles.length, 3);
   assert.ok(resolved.source.resolvedFiles.every((file) => /^sha256-/.test(file.integrity)));
-  assert.match(requested.find((url) => url.includes("/git/trees/")), new RegExp(treeSha));
+  assert.ok(requested.find((url) => url.includes("/git/trees/")).includes(`/git/trees/${revision}?`));
+  assert.ok(requested.every((url) => url.includes(revision)), "every request uses the pinned revision");
 
   requested.length = 0;
   const locked = await lockedRemotePackage(component, resolved.source);
@@ -359,3 +366,30 @@ test("remote skill directories are pinned, normalized, checksummed, and complete
   assert.equal(await lockedRemoteContent(component, resolved.source), await remoteContent(component));
 });
 
+test("remote catalog content must be pinned to an immutable revision", () => {
+  const component = listComponents().find(({ id }) => id === "skill/terraform-skill");
+  const branch = component.content.url.replace(/\/[0-9a-f]{40}\//, "/master/");
+  assert.throws(() => validateCatalogComponent({ ...component, content: { ...component.content, url: branch } }),
+    /pinned to an immutable GitHub revision/);
+  assert.throws(() => validateCatalogComponent({ ...component, content: { ...component.content, mutable: true } }),
+    /Unknown content field mutable/);
+});
+
+test("remote fetches time out with an explicit error", async (context) => {
+  const originalFetch = globalThis.fetch;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  const signals = [];
+  globalThis.fetch = async (url, options) => {
+    signals.push(options.signal);
+    throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  };
+  const component = listComponents().find(({ id }) => id === "skill/fastapi");
+  await assert.rejects(resolveRemotePackage(component),
+    /Timed out after 30 seconds while trying to resolve skill\/fastapi/);
+  assert.ok(signals.length && signals.every((signal) => signal instanceof AbortSignal));
+});
+
+function response(value) {
+  const bytes = Buffer.from(value);
+  return { ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.length) };
+}

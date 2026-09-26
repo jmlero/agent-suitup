@@ -32,42 +32,19 @@ export function managedPayload(document, id) {
   if (firstNewline === -1 || lastNewline <= firstNewline) {
     throw new ManagedContentError(`Malformed managed block: ${id}`);
   }
-  let body = segment.slice(firstNewline + 1, lastNewline);
-  if (range.format === "legacy") {
-    const metadataEnd = body.indexOf("\n");
-    if (metadataEnd === -1 || !body.startsWith("<!-- agent-suitup:source ")) {
-      throw new ManagedContentError(`Missing managed metadata: ${id}`);
-    }
-    body = body.slice(metadataEnd + 1);
-  }
-  return normalizeText(body);
+  return normalizeText(segment.slice(firstNewline + 1, lastNewline));
 }
 
 export function findManagedRange(document, id) {
-  const formats = [
-    { format: "compact", startMarker: `<!--as:${id}-->`, endMarker: `<!--/as:${id}-->` },
-    {
-      format: "legacy",
-      startMarker: `<!-- agent-suitup:start ${id} -->`,
-      endMarker: `<!-- agent-suitup:end ${id} -->`,
-    },
-  ].map((candidate) => ({
-    ...candidate,
-    starts: occurrences(document, candidate.startMarker),
-    ends: occurrences(document, candidate.endMarker),
-  }));
-  const startCount = formats.reduce((sum, candidate) => sum + candidate.starts.length, 0);
-  const endCount = formats.reduce((sum, candidate) => sum + candidate.ends.length, 0);
-  if (!startCount && !endCount) return null;
-  const match = formats.find((candidate) => candidate.starts.length === 1 && candidate.ends.length === 1);
-  if (startCount !== 1 || endCount !== 1 || !match || match.ends[0] < match.starts[0]) {
+  const startMarker = `<!--as:${id}-->`;
+  const endMarker = `<!--/as:${id}-->`;
+  const starts = occurrences(document, startMarker);
+  const ends = occurrences(document, endMarker);
+  if (!starts.length && !ends.length) return null;
+  if (starts.length !== 1 || ends.length !== 1 || ends[0] < starts[0]) {
     throw new ManagedContentError(`Ambiguous managed boundaries for ${id}`);
   }
-  return {
-    start: match.starts[0],
-    end: match.ends[0] + match.endMarker.length,
-    format: match.format,
-  };
+  return { start: starts[0], end: ends[0] + endMarker.length };
 }
 
 function managedSegment(id, content) {

@@ -6,4 +6,6 @@
 - Avoid speculative abstractions, configuration, extension points, and wrappers.
 - Fix shared root causes; preserve validation, error handling, security,
   accessibility, and data safety.
-- Verify non-trivial behavior with the smallest relevant check.
+- Verify non-trivial behavior with the smallest relevant checks.
+
+Adapted from DietrichGebert/ponytail (MIT License).

@@ -14,7 +14,7 @@ export function componentGuide(component, { scope = "project", adapters = [], re
   const name = component.id.slice(component.id.indexOf("/") + 1);
   const root = scope === "user" && component.scopes.includes("user") ? "~/" : "./";
   const destination = component.kind === "block" ? "./AGENTS.md"
-    : component.kind === "plugin" ? `${root}.claude/settings.json`
+    : component.kind === "plugin" ? `${root}.claude/settings.json (enabledPlugins and extraKnownMarketplaces)`
       : `${root}.agents/skills/${name}/SKILL.md`;
   const loading = component.kind === "block" ? `${kind.loading} · ${cost.words} words · ~${cost.estimatedTokens} tokens`
     : component.kind === "plugin" ? "Claude only · plugin settings; runtime setup is separate"

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import fs from "node:fs";
 import os from "node:os";
 import { stdout as output } from "node:process";
 import {
@@ -38,7 +39,7 @@ import {
   sectionKind,
 } from "../src/ui.mjs";
 
-const version = "0.1.0";
+const { version } = JSON.parse(fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 async function main() {
   const parsed = parseArguments(process.argv.slice(2));
@@ -176,7 +177,8 @@ async function add({ cwd, home, flags, values }) {
     }
 
     const components = selectedIds.map((id) => requireComponent(id));
-    const adapters = interactiveAdapters ?? enableRequiredAdapters(flags.adapters ?? [...(existing?.adapters ?? [])], components, flags.adapters);
+    const adapters = interactiveAdapters
+      ?? enableRequiredAdapters(withAdapters(existing, flags.adapters), components, flags.adapters);
     const byId = new Map((existing?.components ?? []).map((selection) => [selection.id, selection]));
     for (const component of components) {
       const { id } = component;
@@ -206,16 +208,17 @@ async function add({ cwd, home, flags, values }) {
 }
 
 async function remove({ cwd, home, flags, values }) {
-  if (!values.length) throw new Error("Usage: agent-suitup remove <component> [component...]");
+  if (!values.length && flags.adapters === null) {
+    throw new Error("Usage: agent-suitup remove <component> [component...] or remove --adapter <adapter>");
+  }
   const existing = readManifest(cwd, { required: true });
   const installed = new Set(existing.components.map(({ id }) => id));
   const missing = values.filter((id) => !installed.has(id));
   if (missing.length) throw new Error(`Not installed: ${missing.join(", ")}`);
   const removed = new Set(values);
-  const manifest = normalizeManifest({
-    ...existing,
-    components: existing.components.filter(({ id }) => !removed.has(id)),
-  });
+  const components = existing.components.filter(({ id }) => !removed.has(id));
+  const adapters = flags.adapters === null ? existing.adapters : removeAdapters(existing, components, flags.adapters);
+  const manifest = normalizeManifest({ ...existing, adapters, components });
   await applyDesired({
     cwd,
     home,
@@ -223,8 +226,24 @@ async function remove({ cwd, home, flags, values }) {
     flags,
     writeManifest: true,
     displayComponents: values.map((id) => getComponent(id)).filter(Boolean),
-    action: "Components removed",
+    action: values.length ? "Components removed" : "Adapters removed",
   });
+}
+
+function removeAdapters(existing, components, dropped) {
+  if (!dropped.length) throw new Error("remove --adapter needs claude, grok, or a comma-separated list");
+  const disabled = dropped.filter((adapter) => !existing.adapters.includes(adapter));
+  if (disabled.length) throw new Error(`Adapter not enabled: ${disabled.join(", ")}`);
+  const adapters = existing.adapters.filter((adapter) => !dropped.includes(adapter));
+  const dependents = components.map(({ id }) => getComponent(id))
+    .filter((component) => component?.adapters && !component.adapters.some((adapter) => adapters.includes(adapter)));
+  if (dependents.length) {
+    const ids = dependents.map(({ id }) => id).join(", ");
+    const required = [...new Set(dependents.flatMap((component) => component.adapters))].join(" or ");
+    const one = dependents.length === 1;
+    throw new Error(`${ids} still require${one ? "s" : ""} the ${required} adapter; remove ${one ? "it" : "them"} first or in the same command`);
+  }
+  return adapters;
 }
 
 async function plan({ cwd, home, flags }) {
@@ -364,7 +383,7 @@ async function chooseScope(prompt, fallback) {
 }
 
 async function chooseAdapters(prompt, flags, existing, components) {
-  const adapters = enableRequiredAdapters(flags.adapters ?? existing?.adapters ?? [], components, flags.adapters);
+  const adapters = enableRequiredAdapters(withAdapters(existing, flags.adapters), components, flags.adapters);
   if (flags.adapters !== null || components.every(({ kind }) => kind === "plugin")) return adapters;
   const fallback = adapters.length === 2 ? "both" : adapters[0] ?? "portable";
   console.log("Portable: canonical instructions and skills. Claude: add its bridges. Grok: add command wrappers.");
@@ -408,6 +427,11 @@ async function chooseComponents(prompt, components, detected, installedIds = new
   }
 }
 
+// Installing only adds adapters; remove --adapter is the explicit way to drop one.
+function withAdapters(existing, requested) {
+  return [...new Set([...(existing?.adapters ?? []), ...(requested ?? [])])];
+}
+
 function enableRequiredAdapters(adapters, components, explicitAdapters) {
   const enabled = [...adapters];
   if (explicitAdapters !== null) return enabled;
@@ -448,8 +472,7 @@ function parseArguments(argv) {
     else if (value === "--plain") flags.plain = true;
     else if (value === "--dry-run") flags.dryRun = true;
     else if (value === "--force") flags.force = true;
-    else if (value === "--scope" || value === "--adapter" || value === "--adapters"
-      || value === "--target" || value === "--targets") {
+    else if (value === "--scope" || value === "--adapter" || value === "--adapters") {
       const next = argv[index + 1];
       if (!next || next.startsWith("-")) throw new Error(`${value} requires a value`);
       index += 1;
@@ -457,8 +480,6 @@ function parseArguments(argv) {
     } else if (value.startsWith("--scope=")) setValueFlag(flags, "--scope", value.slice(8));
     else if (value.startsWith("--adapter=")) setValueFlag(flags, "--adapter", value.slice(10));
     else if (value.startsWith("--adapters=")) setValueFlag(flags, "--adapters", value.slice(11));
-    else if (value.startsWith("--target=")) setValueFlag(flags, "--target", value.slice(9));
-    else if (value.startsWith("--targets=")) setValueFlag(flags, "--targets", value.slice(10));
     else if (value.startsWith("-")) throw new Error(`Unknown flag: ${value}`);
     else if (!command) command = value;
     else values.push(value);
@@ -473,9 +494,7 @@ function setValueFlag(flags, name, value) {
     flags.scope = value;
     return;
   }
-  flags.adapters = name === "--target" || name === "--targets"
-    ? parseLegacyTargets(value)
-    : parseAdapters(value);
+  flags.adapters = parseAdapters(value);
 }
 
 function parseAdapters(value) {
@@ -487,14 +506,6 @@ function parseAdapters(value) {
   return [...new Set(adapters)];
 }
 
-function parseLegacyTargets(value) {
-  const targets = value.split(",").map((target) => target.trim()).filter(Boolean);
-  if (!targets.length || targets.some((target) => !new Set(["claude", "codex"]).has(target))) {
-    throw new Error(`Invalid legacy targets: ${value}`);
-  }
-  return targets.includes("claude") ? ["claude"] : [];
-}
-
 function printHelp() {
   console.log(`agent-suitup ${version}
 
@@ -504,7 +515,8 @@ Usage:
   agent-suitup inspect <component>
   agent-suitup add [component...] [--scope project|user] [--adapter claude|grok]
   agent-suitup plan
-  agent-suitup remove <component...>
+  agent-suitup remove <component...> [--adapter claude|grok]
+  agent-suitup remove --adapter claude|grok
   agent-suitup update
   agent-suitup doctor
 
@@ -516,7 +528,8 @@ Options:
   --force         Replace drifted managed content
   --scope VALUE   Default project or user scope
   --adapter VALUE Vendor adapters: claude, grok, claude,grok, or none
-                  (alias --adapters); installing replaces the adapter set
+                  (alias --adapters); init and add only add adapters,
+                  remove --adapter drops them
   -h, --help      Show help
   --version       Show version
 

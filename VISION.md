@@ -100,8 +100,7 @@ integrity record. Operations are idempotent, reversible, inspectable,
 updateable, and reproducible.
 
 `AGENTS.md` uses compact ownership boundaries. Versions and checksums live in
-the lockfile rather than being repeated inside the prompt. Legacy boundaries
-remain readable for safe migration.
+the lockfile rather than being repeated inside the prompt.
 
 The CLI never overwrites unowned content. Ambiguous ownership or local drift is
 reported and requires explicit resolution.
@@ -136,8 +135,8 @@ observed failures and explain rejected candidates. Engineering judgment should
 be visible in these choices, including exceptions and reasons to install
 nothing. Installer tests establish lifecycle behavior, not instruction efficacy.
 
-Remote content is pinned, attributable, license-preserving, bounded, and loaded
-on demand.
+Remote content is pinned to reviewed revisions in the catalog, attributable,
+license-preserving, bounded, and loaded on demand.
 
 ## Current CLI
 
@@ -163,6 +162,7 @@ agent-suitup add command/verify-work
 agent-suitup add plugin/github          # optional Claude edge
 agent-suitup plan                       # preview exact changes
 agent-suitup remove <component>         # remove only owned state
+agent-suitup remove --adapter grok      # drop an adapter's files
 agent-suitup update                     # refresh visible, pinned content
 agent-suitup doctor                     # detect drift and missing prerequisites
 ```

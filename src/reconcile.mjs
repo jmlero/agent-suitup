@@ -12,7 +12,7 @@ import {
   requireComponent,
   resolveRemotePackage,
 } from "./catalog.mjs";
-import { integrity, normalizeText } from "./integrity.mjs";
+import { integrity, normalizeText, sameContent } from "./integrity.mjs";
 import { managedPayload, removeManagedBlock, upsertManagedBlock } from "./managed.mjs";
 import { ConflictError, Planner } from "./planner.mjs";
 import { portablePath, resolvePortablePath } from "./paths.mjs";
@@ -29,7 +29,7 @@ export async function reconcile({
   const conflicts = catalogConflicts(selectedComponents);
   if (conflicts.length) throw new Error(`Selected components conflict: ${conflicts.join(", ")}`);
   const planner = new Planner({ cwd, home, force });
-  const claude = new ClaudeSettingsEditor({ cwd, home });
+  const claude = new ClaudeSettingsEditor({ cwd, home, previousLock });
   const nextLock = { lockfileVersion: 1, components: {} };
   const desiredIds = new Set(manifest.components.map(({ id }) => id));
   const missingPrerequisites = [];
@@ -113,6 +113,7 @@ function installBlock({ component, previous, planner, cwd, force }, entry, conte
   if (!new Set(["missing", "file"]).has(current.kind)) {
     throw new ConflictError(`Cannot manage ${planner.label(file)}: it is a ${current.kind}`);
   }
+  assertTextDocument(current, file, planner);
   const document = current.kind === "file" ? current.content : "";
   const payload = managedPayload(document, component.id);
   if (payload) {
@@ -141,7 +142,7 @@ function installSkill({ component, selection, adapters, previous, planner, cwd, 
     const fileIntegrity = integrity(skillFile.content);
     planner.write(canonical, skillFile.content, {
       mode: skillFile.mode ?? 0o644,
-      owned: Boolean(previousFile) || (current.kind === "file" && current.content === skillFile.content),
+      owned: Boolean(previousFile) || (current.kind === "file" && sameContent(current.content, skillFile.content)),
       expectedIntegrity: previousFile?.integrity,
     });
     entry.files.push(fileRecord(canonical, "file", planner, {
@@ -161,7 +162,7 @@ function installSkill({ component, selection, adapters, previous, planner, cwd, 
         const copyState = planner.state(bridgeFile);
         planner.write(bridgeFile, skillFile.content, {
           mode: skillFile.mode ?? 0o644,
-          owned: Boolean(previousCopy) || (copyState.kind === "file" && copyState.content === skillFile.content),
+          owned: Boolean(previousCopy) || (copyState.kind === "file" && sameContent(copyState.content, skillFile.content)),
           expectedIntegrity: previousCopy?.integrity,
         });
         entry.files.push(fileRecord(bridgeFile, "file", planner, {
@@ -223,8 +224,9 @@ function installSkill({ component, selection, adapters, previous, planner, cwd, 
 }
 
 function installPlugin({ component, selection, claude }, entry) {
-  claude.enablePlugin(component, selection.scope);
+  const marketplaceCreated = claude.enablePlugin(component, selection.scope);
   entry.adapter = component.adapter;
+  if (marketplaceCreated) entry.marketplaceCreated = true;
 }
 
 async function resolveSkillPackage({ component, previous, planner, cwd, home, force, refreshRemote, selection }) {
@@ -257,9 +259,7 @@ function uninstallComponent({ id, previous, component, planner, claude, cwd, hom
     removeFiles(previous.files, planner);
   }
 
-  if (previous.kind === "hook" && previous.adapter?.claude?.command) {
-    claude.disableHook(previous.scope, previous.adapter.claude.command);
-  } else if (previous.kind === "plugin") {
+  if (previous.kind === "plugin") {
     if (previous.adapter) claude.disablePluginAdapter(previous.adapter, previous.scope);
     else if (component) claude.disablePlugin(component, previous.scope);
     else planner.note(`${id}: remove its Claude enabledPlugins entry manually; it is no longer in the catalog`);
@@ -271,6 +271,7 @@ function uninstallBlock(id, previous, planner, cwd, force) {
   const current = planner.state(file);
   if (current.kind === "missing") return;
   if (current.kind !== "file") throw new ConflictError(`Managed file changed type: ${planner.label(file)}`);
+  assertTextDocument(current, file, planner);
   const payload = managedPayload(current.content, id);
   if (!payload) return;
   if (integrity(payload) !== previous.integrity && !force) {
@@ -280,6 +281,12 @@ function uninstallBlock(id, previous, planner, cwd, force) {
   const record = previous.files?.find((candidate) => candidate.kind === "block");
   if (!result && record?.created) planner.delete(file, { owned: true, expectedKind: "file" });
   else planner.write(file, result, { allowExisting: true });
+}
+
+function assertTextDocument(current, file, planner) {
+  if (current.kind === "file" && typeof current.content !== "string") {
+    throw new ConflictError(`Cannot manage ${planner.label(file)}: it is not UTF-8 text`);
+  }
 }
 
 function removeStaleFiles(previous, next, planner) {
@@ -304,8 +311,18 @@ function removeFiles(files = [], planner) {
       expectedKind: record.kind,
       expectedIntegrity: record.integrity,
       expectedTarget: record.target,
+      pruneBelow: skillsDirectory(file),
     });
   }
+}
+
+// The agent's skills folder holding a managed file, such as ~/.agents/skills.
+function skillsDirectory(file) {
+  for (let directory = path.dirname(file); directory !== path.dirname(directory); directory = path.dirname(directory)) {
+    if (path.basename(directory) === "skills"
+      && [".agents", ".claude", ".grok"].includes(path.basename(path.dirname(directory)))) return directory;
+  }
+  return undefined;
 }
 
 function validateSelection(component, selection, adapters) {
@@ -332,7 +349,6 @@ function lockSource(component) {
       kind: "remote",
       url: component.content.url,
       upstream: component.content.upstream,
-      mutable: Boolean(component.content.mutable),
     };
   }
   if (component.kind === "plugin") return { kind: "adapter", adapter: "claude" };
@@ -371,7 +387,7 @@ function localSkillPackage(previous, canonicalDirectory, planner, force) {
     }
     files.push({
       path: path.relative(canonicalDirectory, absolute).split(path.sep).join("/"),
-      content: normalizeText(current.content),
+      content: typeof current.content === "string" ? normalizeText(current.content) : current.content,
       mode: current.mode & 0o111 ? 0o755 : 0o644,
     });
   }

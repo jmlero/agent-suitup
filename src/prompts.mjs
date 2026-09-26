@@ -2,6 +2,8 @@ import readline from "node:readline";
 import { Picker, pickerFrame } from "./dashboard.mjs";
 export { Picker, pickerFrame } from "./dashboard.mjs";
 
+const terminationSignals = process.platform === "win32" ? [] : ["SIGTERM", "SIGHUP"];
+
 export class PromptCancelled extends Error {
   constructor() {
     super("Setup cancelled. No files written.");
@@ -35,9 +37,11 @@ export class Prompts {
   question(label) {
     if (this.reader) {
       this.output.write(label);
-      if (this.answers.length) return Promise.resolve(this.answers.shift());
+      // Piped answers are not echoed, so end the prompt line once one arrives.
+      const answered = (answer) => { this.output.write("\n"); return answer; };
+      if (this.answers.length) return Promise.resolve(answered(this.answers.shift()));
       if (this.ended) return Promise.reject(new PromptCancelled());
-      return new Promise((resolve, reject) => { this.pending = { resolve, reject }; });
+      return new Promise((resolve, reject) => { this.pending = { resolve, reject }; }).then(answered);
     }
     if (this.input.readableEnded) return Promise.reject(new PromptCancelled());
     return new Promise((resolve, reject) => {
@@ -97,7 +101,9 @@ export function pickComponents(components, {
 } = {}) {
   const picker = new Picker(components, options);
   const wasRaw = Boolean(input.isRaw);
-  const wasPaused = input.isPaused();
+  // A stream nobody has read yet is not flowing either; leave it paused so
+  // input typed during the picker waits for the next prompt.
+  const wasFlowing = input.readableFlowing === true;
   return new Promise((resolve, reject) => {
     let finished = false;
     const render = () => {
@@ -108,13 +114,15 @@ export function pickComponents(components, {
         finish(error);
       }
     };
+    // Restore the screen first: raw mode can fail once the terminal is gone.
     const cleanup = () => {
       input.off("keypress", onKey);
       input.off("end", onEnd);
       output.off("resize", render);
+      for (const signal of terminationSignals) process.off(signal, onSignal);
+      output.write("\x1b[?2004l\x1b[?25h\x1b[?1049l");
+      if (!wasFlowing) input.pause();
       input.setRawMode(wasRaw);
-      if (wasPaused) input.pause();
-      output.write("\x1b[?25h\x1b[?1049l");
     };
     const finish = (error) => {
       if (finished) return;
@@ -129,14 +137,20 @@ export function pickComponents(components, {
       else render();
     };
     const onEnd = () => finish(new PromptCancelled());
+    // Restore the terminal, then let the signal terminate the process as usual.
+    const onSignal = (signal) => {
+      finish(new PromptCancelled());
+      process.kill(process.pid, signal);
+    };
     try {
       readline.emitKeypressEvents(input);
       input.setRawMode(true);
       input.on("keypress", onKey);
       input.once("end", onEnd);
       output.on("resize", render);
+      for (const signal of terminationSignals) process.once(signal, onSignal);
       input.resume();
-      output.write("\x1b[?1049h\x1b[?25l");
+      output.write("\x1b[?1049h\x1b[?25l\x1b[?2004h");
       render();
     } catch (error) {
       finish(error);

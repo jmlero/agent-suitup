@@ -20,6 +20,11 @@ For every addition or periodic review:
    integration, reference inside a skill, or nothing.
 3. Verify source, immutable revision where applicable, license, attribution,
    supported scope, loading behavior, prerequisites, and lifecycle operations.
+   Every component with content declares a license. Remote skills point at a
+   GitHub raw URL pinned to a full commit SHA; to adopt newer upstream content,
+   review the upstream diff, move the pin in `catalog/catalog.json`, re-derive
+   `context.estimatedTokens` from the pinned `SKILL.md` and overlay, and record
+   the change in a catalog review. Installations pick up a new pin on `update`.
 4. For blocks, derive normalized context cost and require nonempty content, an
    always-on outcome, and justification. There is no word or token validity
    range. Review length alongside necessary conditions and exceptions. A
@@ -38,5 +43,9 @@ For every addition or periodic review:
 
 Component decisions are recorded in the
 [2026-08-15 catalog review](catalog-review-2026-08-15.md), with focused changes,
-debugging, and migration additions in the [2026-09-07 review](catalog-review-2026-09-07.md).
+debugging, and migration additions in the [2026-09-07 review](catalog-review-2026-09-07.md),
+and block wording, remote pins, and license metadata in the
+[2026-09-26 review](catalog-review-2026-09-26.md). `schemas/catalog.schema.json`
+mirrors the runtime catalog validation; `test/schema.test.mjs` fails when they
+drift apart.
 Rejected candidates remain documentation, not dormant catalog entries.

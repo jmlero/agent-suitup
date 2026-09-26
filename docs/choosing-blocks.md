@@ -19,7 +19,9 @@ exceptions to those instructions and is not loaded into your project's context.
   only for selected changes. The current block applies to features and bug
   fixes broadly; it does not encode those narrower exceptions.
 - **Tradeoff:** Choosing test order as project policy can require test setup
-  before you know whether an exploratory implementation is worth keeping.
+  before you know whether an exploratory implementation is worth keeping. The
+  cycle repeats until the requirements are met, and refactoring is limited to
+  the code the change touched, consistent with `block/focused-changes`.
 
 Example decision: adopt for a maintained parser with executable behavior tests;
 skip for a disposable interface prototype whose interactions are still being
@@ -36,7 +38,8 @@ upstream name; the agreement concerns implementation scope.
   and changes consistently follow it.
 - **Tradeoff:** The smallest safe change depends on the requirements. Planned
   extension points must be stated as requirements so they are not mistaken for
-  speculative work. Small diffs alone do not establish correctness.
+  speculative work. Small diffs alone do not establish correctness. The
+  installed text ends with a one-line attribution to the MIT-licensed upstream.
 
 Example decision: adopt after reviewing an unnecessary provider abstraction for
 a project with one required provider; specify the abstraction explicitly when
@@ -65,7 +68,8 @@ does not establish a measured improvement in real tasks.
 [Read the instruction](../catalog/blocks/transparent-shortcuts.md).
 
 - **Consider when:** Necessary work is deliberately deferred during delivery
-  and you want its reason and risk recorded in the project's normal task system.
+  and you want its reason and risk recorded in the project's normal task system,
+  or in the handoff when the project has none.
 - **Skip when:** Your delivery workflow already captures these decisions, or
   the supposed deferred work is merely a possible future feature.
 - **Tradeoff:** Deciding what is necessary requires judgment. Overuse can turn
@@ -87,7 +91,8 @@ do not create a debt item for a speculative multi-region architecture.
 - **Tradeoff:** This is broad guidance. It supplies neither a threat model nor
   concrete limits, roles, or authentication choices. Those still belong in the
   project's design. It should not be read as requiring authentication for every
-  operation regardless of sensitivity.
+  operation regardless of sensitivity. A protection relaxed on request is
+  recorded like deferred work: in the normal task system, or in the handoff.
 
 Example decision: consider it when introducing a privileged upload endpoint;
 identify the permitted callers and size limits in the actual feature requirements.
@@ -150,9 +155,11 @@ for provenance and the limits of the evaluation.
 ## Combining and previewing selections
 
 Verification already appears in TDD, minimal implementation, CI parity, and
-completion evidence. Installing all four does not establish four independent
-benefits. Completion evidence governs the handoff; CI parity adds a specific
-configuration obligation. Choose them for those differences.
+completion evidence, and all four refer to the same relevant checks. TDD runs
+them after each change, minimal implementation starts with the smallest ones,
+completion evidence expands them when risk warrants and reports what ran or was
+skipped, and CI parity adds the closest CI-equivalent check. Installing all four
+does not establish four independent benefits. Choose them for those differences.
 
 Check the chosen agreements against existing project policies. For example,
 the broad TDD block may conflict with a policy limiting tests to selected kinds
