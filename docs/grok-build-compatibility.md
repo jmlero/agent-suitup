@@ -8,7 +8,7 @@ The portable agent-suitup core is compatible with Codex and Grok Build. Full
 harness parity is not: their plugin, configuration, MCP, and subagent surfaces
 remain vendor-specific.
 
-| Surface | Agent Suitup behavior | Status |
+| Surface | agent-suitup behavior | Status |
 |---|---|---|
 | Instructions | Both discover repository `AGENTS.md` from root to working directory. | Native |
 | Skills | Both discover `.agents/skills/<name>/SKILL.md`. | Native |

@@ -21,7 +21,7 @@ export function emptyManifest(adapters = []) {
 }
 
 export function emptyLock() {
-  return { lockfileVersion: 1, components: {}, bridges: {} };
+  return { lockfileVersion: 1, components: {} };
 }
 
 export function readManifest(cwd, { required = false } = {}) {
@@ -40,7 +40,6 @@ export function readLock(cwd) {
   if (lock.lockfileVersion !== 1 || !lock.components) {
     throw new Error(`Unsupported lockfile: ${file}`);
   }
-  lock.bridges ??= {};
   return lock;
 }
 

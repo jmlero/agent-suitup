@@ -6,8 +6,7 @@
   "required": ["lockfileVersion", "components"],
   "properties": {
     "lockfileVersion": { "const": 1 },
-    "components": { "type": "object", "additionalProperties": { "type": "object" } },
-    "bridges": { "type": "object" }
+    "components": { "type": "object", "additionalProperties": { "type": "object" } }
   },
   "additionalProperties": false
 }

@@ -46,7 +46,7 @@ test("non-interactive assessment leaves missing installed content for explicit r
   assert.equal(assessed.status, 0, assessed.stderr);
   assert.match(assessed.stdout, /Assessment complete/);
   assert.match(assessed.stdout, /Repository left unchanged/);
-  assert.doesNotMatch(assessed.stdout, /Healthy|Agent Suitup ready|Change set/);
+  assert.doesNotMatch(assessed.stdout, /Healthy|agent-suitup ready|Change set/);
   assert.deepEqual(snapshotTree(fixture.root), before);
 
   assert.equal(run(fixture, "doctor").status, 1);
@@ -120,6 +120,7 @@ test("interactive init exposes the whole catalog and can install a block without
   assert.doesNotMatch(initialized.stdout, /Default scope/);
   assert.match(initialized.stdout, /01 Explore[\s\S]*02 Connect[\s\S]*03 Review/);
   assert.match(initialized.stdout, /Skills \(8\)[\s\S]*Commands \(2\)[\s\S]*Agent integrations \(5\)/);
+  assert.match(initialized.stdout, /agent-suitup ready[\s\S]*More\s+agent-suitup add --interactive/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, []);
@@ -167,7 +168,7 @@ test("interactive init leaves an existing installation unchanged when all select
   ], "init", "--interactive", "--adapter", "claude");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Repository left unchanged/);
-  assert.doesNotMatch(initialized.stdout, /Healthy|Agent Suitup ready|Change set/);
+  assert.doesNotMatch(initialized.stdout, /Healthy|agent-suitup ready|Change set/);
   assert.deepEqual(snapshotTree(fixture.root), before);
 });
 
@@ -552,7 +553,7 @@ for (const adapter of ["none", "claude"]) {
     assert.ok(instructions.startsWith(original));
     assert.ok(instructions.includes(body));
     assert.equal(count(instructions, "<!--as:block/focused-changes-->"), 1);
-    if (adapter === "claude") assert.equal(read(fixture.project, "CLAUDE.md"), instructions);
+    assert.equal(fs.existsSync(path.join(fixture.project, "CLAUDE.md")), false);
     const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
     assert.deepEqual(manifest.components, [{ id, scope: "project" }]);
 
@@ -747,7 +748,7 @@ test("Claude adapter exposes canonical blocks and skills without duplicating the
 
   const installed = run(fixture, "add", "block/tdd", "skill/audit-code", "--adapter", "claude");
   assert.equal(installed.status, 0, installed.stderr);
-  assert.match(read(fixture.project, "CLAUDE.md"), /@AGENTS\.md/);
+  assert.equal(read(fixture.project, "CLAUDE.md"), "# Claude notes\n");
   if (process.platform !== "win32") {
     assert.equal(fs.lstatSync(path.join(fixture.project, ".claude", "skills", "audit-code")).isSymbolicLink(), true);
   }
@@ -759,119 +760,30 @@ test("Claude adapter exposes canonical blocks and skills without duplicating the
   assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "audit-code", "SKILL.md")));
 });
 
-test("Claude bridge is symlink-first and removes only an owned bridge", { skip: process.platform === "win32" }, (context) => {
+test("Claude reads AGENTS.md directly and never gets a CLAUDE.md", { skip: process.platform === "win32" }, (context) => {
   const fixture = makeFixture(context);
   const installed = run(fixture, "add", "block/tdd", "--adapter", "claude");
   assert.equal(installed.status, 0, installed.stderr);
-  const bridge = path.join(fixture.project, "CLAUDE.md");
-  assert.equal(fs.lstatSync(bridge).isSymbolicLink(), true);
-  assert.equal(fs.readlinkSync(bridge), "AGENTS.md");
   assert.match(read(fixture.project, "AGENTS.md"), /<!--as:block\/tdd-->/);
+  assert.equal(fs.existsSync(path.join(fixture.project, "CLAUDE.md")), false);
+  assert.equal(Object.hasOwn(JSON.parse(read(fixture.project, ".agent-suitup/lock.json")), "bridges"), false);
 
-  const removed = run(fixture, "remove", "block/tdd");
-  assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(fs.existsSync(bridge), false);
-});
-
-test("Claude adopts an existing AGENTS import without duplicating or owning it", (context) => {
-  const fixture = makeFixture(context);
-  const existing = "# Claude-only guidance\n\n@AGENTS.md\n";
-  fs.writeFileSync(path.join(fixture.project, "CLAUDE.md"), existing);
-
-  const installed = run(fixture, "add", "block/tdd", "--adapter", "claude");
-  assert.equal(installed.status, 0, installed.stderr);
-  assert.equal(read(fixture.project, "CLAUDE.md"), existing);
-  const lock = JSON.parse(read(fixture.project, ".agent-suitup/lock.json"));
-  assert.equal(lock.bridges.claudeAgents.managed, "import");
-  assert.equal(lock.bridges.claudeAgents.owned, false);
-
-  const removed = run(fixture, "remove", "block/tdd");
-  assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(read(fixture.project, "CLAUDE.md"), existing);
-});
-
-test("Claude adopts a valid existing symlink and leaves it on removal", { skip: process.platform === "win32" }, (context) => {
-  const fixture = makeFixture(context);
-  fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), "# Existing\n");
+  // A bridge recorded by an earlier lockfile is forgotten, not repaired or deleted.
+  const lockFile = path.join(fixture.project, ".agent-suitup", "lock.json");
+  const lock = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+  lock.bridges = { claudeAgents: { path: "./CLAUDE.md", managed: "symlink", target: "AGENTS.md", owned: true } };
+  fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
   fs.symlinkSync("AGENTS.md", path.join(fixture.project, "CLAUDE.md"));
-
-  const installed = run(fixture, "add", "block/tdd", "--adapter", "claude");
-  assert.equal(installed.status, 0, installed.stderr);
-  const lock = JSON.parse(read(fixture.project, ".agent-suitup/lock.json"));
-  assert.equal(lock.bridges.claudeAgents.managed, "symlink");
-  assert.equal(lock.bridges.claudeAgents.owned, false);
+  const stale = run(fixture, "doctor");
+  assert.equal(stale.status, 1);
+  assert.match(stale.stderr, /No file changes\.\nLockfile metadata differs/);
+  assert.equal(run(fixture, "update").status, 0);
+  assert.equal(Object.hasOwn(JSON.parse(read(fixture.project, ".agent-suitup/lock.json")), "bridges"), false);
+  assert.match(run(fixture, "doctor").stdout, /Healthy/);
 
   const removed = run(fixture, "remove", "block/tdd");
   assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(fs.lstatSync(path.join(fixture.project, "CLAUDE.md")).isSymbolicLink(), true);
-  assert.equal(read(fixture.project, "AGENTS.md"), "# Existing\n");
-});
-
-test("doctor safely repairs a replaced Claude symlink as a preserved overlay", { skip: process.platform === "win32" }, (context) => {
-  const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "block/tdd", "--adapter", "claude").status, 0);
-  const bridge = path.join(fixture.project, "CLAUDE.md");
-  fs.unlinkSync(bridge);
-  fs.writeFileSync(bridge, "# Claude-only overlay\n");
-
-  const doctor = run(fixture, "doctor");
-  assert.equal(doctor.status, 1);
-  assert.match(doctor.stderr, /UPDATE \.\/CLAUDE\.md/);
-  assert.match(doctor.stderr, /@AGENTS\.md/);
-
-  const repaired = run(fixture, "update");
-  assert.equal(repaired.status, 0, repaired.stderr);
-  const content = read(fixture.project, "CLAUDE.md");
-  assert.match(content, /# Claude-only overlay/);
-  assert.match(content, /@AGENTS\.md/);
-  assert.match(run(fixture, "doctor").stdout, /Healthy/);
-
-  assert.equal(run(fixture, "remove", "block/tdd").status, 0);
-  assert.equal(read(fixture.project, "CLAUDE.md"), "# Claude-only overlay\n");
-});
-
-test("Claude refuses an unrelated symlink unless force explicitly replaces it", { skip: process.platform === "win32" }, (context) => {
-  const fixture = makeFixture(context);
-  fs.writeFileSync(path.join(fixture.project, "OTHER.md"), "# Other\n");
-  fs.symlinkSync("OTHER.md", path.join(fixture.project, "CLAUDE.md"));
-
-  const refused = run(fixture, "add", "block/tdd", "--adapter", "claude");
-  assert.equal(refused.status, 1);
-  assert.match(refused.stderr, /Cannot create Claude bridge/);
-  assert.equal(fs.readlinkSync(path.join(fixture.project, "CLAUDE.md")), "OTHER.md");
-
-  const forced = run(fixture, "add", "block/tdd", "--adapter", "claude", "--force");
-  assert.equal(forced.status, 0, forced.stderr);
   assert.equal(fs.readlinkSync(path.join(fixture.project, "CLAUDE.md")), "AGENTS.md");
-});
-
-test("cleanup refuses a Claude bridge that changed type until force is explicit", { skip: process.platform === "win32" }, (context) => {
-  const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "block/tdd", "--adapter", "claude").status, 0);
-  const bridge = path.join(fixture.project, "CLAUDE.md");
-  fs.unlinkSync(bridge);
-  fs.writeFileSync(bridge, "# Claude-only overlay\n");
-  const before = snapshotTree(fixture.root);
-
-  for (const arguments_ of [
-    ["remove", "block/tdd"],
-    ["add", "block/tdd", "--adapter", "none"],
-  ]) {
-    const refused = run(fixture, ...arguments_);
-    assert.equal(refused.status, 1, refused.stdout);
-    assert.match(refused.stderr, /changed type.*CLAUDE\.md/i);
-    assert.deepEqual(snapshotTree(fixture.root), before);
-  }
-
-  const preview = run(fixture, "remove", "block/tdd", "--force", "--dry-run");
-  assert.equal(preview.status, 0, preview.stderr);
-  assert.match(preview.stdout, /DELETE \.\/CLAUDE\.md\n-# Claude-only overlay/);
-  assert.deepEqual(snapshotTree(fixture.root), before);
-
-  const removed = run(fixture, "remove", "block/tdd", "--force");
-  assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(fs.existsSync(bridge), false);
-  assert.match(run(fixture, "doctor").stdout, /Healthy/);
 });
 
 test("cleanup refuses a user skill bridge that changed type when removing or disabling Claude", { skip: process.platform === "win32" }, (context) => {
@@ -964,6 +876,40 @@ test("detects drift and refuses destructive removal unless forced", (context) =>
   assert.equal(fs.existsSync(skill), false);
 });
 
+test("group-writable checkouts are not drift and keep their permissions", { skip: process.platform === "win32" }, (context) => {
+  const fixture = makeFixture(context);
+  const installed = run(fixture, "add", "block/tdd", "skill/review-pr");
+  assert.equal(installed.status, 0, installed.stderr);
+  const files = ["AGENTS.md", ".agents/skills/review-pr/SKILL.md", ".agent-suitup/lock.json"]
+    .map((file) => path.join(fixture.project, file));
+  for (const file of files) fs.chmodSync(file, 0o664);
+
+  const doctor = run(fixture, "doctor");
+  assert.equal(doctor.status, 0, doctor.stderr);
+  assert.match(doctor.stdout, /Healthy/);
+  const added = run(fixture, "add", "block/focused-changes");
+  assert.equal(added.status, 0, added.stderr);
+  for (const file of files) assert.equal(fs.statSync(file).mode & 0o777, 0o664, file);
+});
+
+test("removal keeps adopted files that existed before installation", (context) => {
+  const fixture = makeFixture(context);
+  const adopted = path.join(fixture.home, ".agents", "skills", "review-pr", "SKILL.md");
+  const canonical = read(repository, "catalog/skills/review-pr/SKILL.md");
+  fs.mkdirSync(path.dirname(adopted), { recursive: true });
+  fs.writeFileSync(adopted, `${canonical.replace(/\r\n/g, "\n").trimEnd()}\n`);
+  const installed = run(fixture, "add", "skill/review-pr", "skill/audit-docs", "--scope", "user");
+  assert.equal(installed.status, 0, installed.stderr);
+  const created = path.join(fixture.home, ".agents", "skills", "audit-docs", "SKILL.md");
+  assert.ok(fs.existsSync(created));
+
+  const removed = run(fixture, "remove", "skill/review-pr", "skill/audit-docs");
+  assert.equal(removed.status, 0, removed.stderr);
+  assert.ok(fs.existsSync(adopted), "a file that existed before installation was deleted");
+  assert.equal(fs.existsSync(created), false);
+  assert.match(removed.stdout, /~\/\.agents\/skills\/review-pr\/SKILL\.md: kept because it existed before installation/);
+});
+
 test("Claude marketplace edits preserve unrelated settings", (context) => {
   const fixture = makeFixture(context);
   fs.mkdirSync(path.join(fixture.project, ".claude"), { recursive: true });
@@ -1007,6 +953,33 @@ test("plugin prerequisites are checked before Claude settings are changed", { sk
   assert.equal(settings.extraKnownMarketplaces["claude-plugins-official"].source.repo, "anthropics/claude-plugins-official");
 });
 
+test("an installed integration missing its executable is reported without blocking other work", { skip: process.platform === "win32" }, (context) => {
+  const fixture = makeFixture(context);
+  const executables = path.join(fixture.root, "bin");
+  fs.mkdirSync(executables);
+  const executable = path.join(executables, "typescript-language-server");
+  fs.writeFileSync(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const installed = runWithEnv(fixture, { PATH: executables }, "add", "plugin/typescript-lsp");
+  assert.equal(installed.status, 0, installed.stderr);
+  fs.unlinkSync(executable);
+
+  const doctor = runWithEnv(fixture, { PATH: executables }, "doctor");
+  assert.equal(doctor.status, 1);
+  assert.doesNotMatch(doctor.stdout, /Healthy/);
+  assert.match(doctor.stderr, /plugin\/typescript-lsp: install typescript-language-server/);
+
+  const added = runWithEnv(fixture, { PATH: executables }, "add", "block/tdd");
+  assert.equal(added.status, 0, added.stderr);
+  assert.match(added.stdout, /plugin\/typescript-lsp: install typescript-language-server/);
+  assert.ok(fs.existsSync(path.join(fixture.project, "AGENTS.md")));
+  const planned = runWithEnv(fixture, { PATH: executables }, "plan");
+  assert.equal(planned.status, 0, planned.stderr);
+
+  const refused = runWithEnv(fixture, { PATH: executables }, "add", "plugin/pyright-lsp");
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /requires commands that are not available: pyright-langserver/);
+});
+
 test("an interactive scope choice takes precedence over a plugin recommendation", (context) => {
   const fixture = makeFixture(context);
   const executableDirectory = path.join(fixture.root, "bin");
@@ -1044,6 +1017,105 @@ test("Grok adapter makes portable commands slash-only without copying their work
   assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "verify-work", "SKILL.md")));
 });
 
+test("Claude adapter makes portable commands slash-only without copying their workflow", (context) => {
+  const fixture = makeFixture(context);
+  const installed = run(fixture, "add", "command/commit-work", "--adapter", "claude");
+  assert.equal(installed.status, 0, installed.stderr);
+
+  const wrapper = path.join(fixture.project, ".claude", "skills", "commit-work");
+  assert.equal(fs.lstatSync(wrapper).isDirectory(), true);
+  assert.deepEqual(fs.readdirSync(wrapper), ["SKILL.md"]);
+  const bridge = read(fixture.project, ".claude/skills/commit-work/SKILL.md");
+  assert.match(bridge, /disable-model-invocation: true/);
+  assert.match(bridge, /\.\.\/\.\.\/\.\.\/\.agents\/skills\/commit-work\/SKILL\.md/);
+  assert.doesNotMatch(bridge, /# Commit Work/);
+  assert.match(run(fixture, "doctor").stdout, /Healthy.*1 component/);
+
+  const portable = run(fixture, "add", "command/commit-work", "--adapter", "none");
+  assert.equal(portable.status, 0, portable.stderr);
+  assert.equal(fs.existsSync(path.join(wrapper, "SKILL.md")), false);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "commit-work", "SKILL.md")));
+});
+
+test("Claude command wrappers replace the folder links of earlier installs", {
+  skip: process.platform === "win32",
+}, (context) => {
+  const fixture = makeFixture(context);
+  assert.equal(run(fixture, "add", "command/verify-work", "--adapter", "claude").status, 0);
+
+  // Recreate the earlier layout, which linked the canonical folder into Claude.
+  const directory = path.join(fixture.project, ".claude", "skills", "verify-work");
+  fs.rmSync(directory, { recursive: true });
+  fs.symlinkSync("../../.agents/skills/verify-work", directory, "dir");
+  const lockFile = path.join(fixture.project, ".agent-suitup", "lock.json");
+  const lock = JSON.parse(fs.readFileSync(lockFile, "utf8"));
+  const entry = lock.components["command/verify-work"];
+  entry.files = entry.files.filter(({ claudeCommandBridge }) => !claudeCommandBridge);
+  entry.files.push({ path: "./.claude/skills/verify-work", kind: "symlink", target: "../../.agents/skills/verify-work", created: true });
+  fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
+  const canonical = read(fixture.project, ".agents/skills/verify-work/SKILL.md");
+
+  const drift = run(fixture, "doctor");
+  assert.equal(drift.status, 1);
+  assert.match(drift.stderr, /DELETE \.\/\.claude\/skills\/verify-work -> \.\.\/\.\.\/\.agents\/skills\/verify-work/);
+  assert.match(drift.stderr, /CREATE \.\/\.claude\/skills\/verify-work\/SKILL\.md/);
+
+  const updated = run(fixture, "update");
+  assert.equal(updated.status, 0, updated.stderr);
+  assert.equal(fs.lstatSync(directory).isDirectory(), true);
+  assert.match(read(fixture.project, ".claude/skills/verify-work/SKILL.md"), /disable-model-invocation: true/);
+  assert.equal(read(fixture.project, ".agents/skills/verify-work/SKILL.md"), canonical);
+  assert.match(run(fixture, "doctor").stdout, /Healthy.*1 component/);
+});
+
+test("Claude command wrappers never write through a user's linked folder", {
+  skip: process.platform === "win32",
+}, (context) => {
+  const fixture = makeFixture(context);
+  const userSkill = path.join(fixture.root, "my-verify-work");
+  fs.mkdirSync(userSkill);
+  fs.writeFileSync(path.join(userSkill, "SKILL.md"), "My workflow.\n");
+  const directory = path.join(fixture.project, ".claude", "skills", "verify-work");
+  fs.mkdirSync(path.dirname(directory), { recursive: true });
+  fs.symlinkSync(userSkill, directory, "dir");
+
+  const refused = run(fixture, "add", "command/verify-work", "--adapter", "claude");
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /Refusing to remove unmanaged \.\/\.claude\/skills\/verify-work/);
+  assert.equal(fs.lstatSync(directory).isSymbolicLink(), true);
+
+  const forced = run(fixture, "add", "command/verify-work", "--adapter", "claude", "--force");
+  assert.equal(forced.status, 0, forced.stderr);
+  assert.equal(fs.lstatSync(directory).isDirectory(), true);
+  assert.equal(fs.readFileSync(path.join(userSkill, "SKILL.md"), "utf8"), "My workflow.\n");
+});
+
+test("re-adding a component with fewer adapters removes only the dropped adapter's files", (context) => {
+  const fixture = makeFixture(context);
+  const added = run(fixture, "add", "block/tdd", "command/verify-work", "--adapters=claude,grok");
+  assert.equal(added.status, 0, added.stderr);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".claude", "skills", "verify-work", "SKILL.md")));
+
+  const dropped = run(fixture, "add", "block/tdd", "--adapter", "grok");
+  assert.equal(dropped.status, 0, dropped.stderr);
+  assert.doesNotMatch(dropped.stdout, /agent-suitup add --interactive/);
+  assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["grok"]);
+  assert.equal(fs.existsSync(path.join(fixture.project, "CLAUDE.md")), false);
+  assert.equal(fs.existsSync(path.join(fixture.project, ".claude", "skills", "verify-work", "SKILL.md")), false);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".grok", "skills", "verify-work", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "verify-work", "SKILL.md")));
+  assert.match(read(fixture.project, "AGENTS.md"), /<!--as:block\/tdd-->/);
+});
+
+test("help lists category keys, adapter values, and command invocation", (context) => {
+  const fixture = makeFixture(context);
+  const help = run(fixture, "--help");
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /Tab, Shift\+Tab, ←\/→, or 1-5 switches categories; ↑\/↓ browse/);
+  assert.match(help.stdout, /claude, grok, claude,grok, or none\s+\(alias --adapters\)/);
+  assert.match(help.stdout, /\$name in Codex or \/name in\s+Claude and Grok/);
+});
+
 test("adapter-specific components reject an explicitly disabled adapter", (context) => {
   const fixture = makeFixture(context);
   const result = run(fixture, "add", "plugin/github", "--adapter", "none");
@@ -1072,7 +1144,7 @@ test("legacy manifests and target flags migrate to optional adapters", (context)
   const legacyFlag = run(fixture, "add", "block/tdd", "--target", "claude,codex");
   assert.equal(legacyFlag.status, 0, legacyFlag.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude"]);
-  assert.ok(fs.existsSync(path.join(fixture.project, "CLAUDE.md")));
+  assert.equal(fs.existsSync(path.join(fixture.project, "CLAUDE.md")), false);
 });
 
 function snapshotTree(directory) {

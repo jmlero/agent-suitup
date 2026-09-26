@@ -1,6 +1,6 @@
 import path from "node:path";
 import { ClaudeSettingsEditor } from "./adapters/claude.mjs";
-import { grokCommandBridge } from "./adapters/grok.mjs";
+import { commandBridge, commandBridgeAgents } from "./adapters/commands.mjs";
 import {
   bundledPackage,
   bundledContent,
@@ -13,18 +13,9 @@ import {
   resolveRemotePackage,
 } from "./catalog.mjs";
 import { integrity, normalizeText } from "./integrity.mjs";
-import {
-  managedPayload,
-  removeClaudeBridge,
-  removeManagedBlock,
-  upsertClaudeBridge,
-  upsertManagedBlock,
-} from "./managed.mjs";
+import { managedPayload, removeManagedBlock, upsertManagedBlock } from "./managed.mjs";
 import { ConflictError, Planner } from "./planner.mjs";
 import { portablePath, resolvePortablePath } from "./paths.mjs";
-
-const bridgePayload = normalizeText("@AGENTS.md\n");
-const bridgeIntegrity = integrity(bridgePayload);
 
 export async function reconcile({
   cwd,
@@ -39,13 +30,24 @@ export async function reconcile({
   if (conflicts.length) throw new Error(`Selected components conflict: ${conflicts.join(", ")}`);
   const planner = new Planner({ cwd, home, force });
   const claude = new ClaudeSettingsEditor({ cwd, home });
-  const nextLock = { lockfileVersion: 1, components: {}, bridges: {} };
+  const nextLock = { lockfileVersion: 1, components: {} };
   const desiredIds = new Set(manifest.components.map(({ id }) => id));
+  const missingPrerequisites = [];
 
   for (const selection of manifest.components) {
     const component = requireComponent(selection.id);
     validateSelection(component, selection, manifest.adapters);
     const previous = previousLock.components[component.id];
+    const missingCommands = missingPrerequisiteCommands(component);
+    if (missingCommands.length) {
+      // Only new selections are refused; an installed component that loses an
+      // executable must not block unrelated work for everyone sharing the manifest.
+      if (!previous) {
+        throw new Error(`${component.id} requires commands that are not available: ${missingCommands.join(", ")}`);
+      }
+      missingPrerequisites.push({ id: component.id, commands: missingCommands });
+      planner.note(`${component.id}: install ${missingCommands.join(", ")} (required on PATH, not found)`);
+    }
     const entry = await installComponent({
       component,
       selection,
@@ -69,9 +71,8 @@ export async function reconcile({
     uninstallComponent({ id, previous, component: getComponent(id), planner, claude, cwd, home, force });
   }
 
-  reconcileClaudeBridge({ manifest, previousLock, nextLock, planner, cwd, home, force });
   claude.flush(planner);
-  return { planner, lock: nextLock };
+  return { planner, lock: nextLock, missingPrerequisites };
 }
 
 async function installComponent(context) {
@@ -150,7 +151,7 @@ function installSkill({ component, selection, adapters, previous, planner, cwd, 
     }));
   }
 
-  if (adapters.includes("claude")) {
+  if (adapters.includes("claude") && component.kind !== "command") {
     const claudeSkill = path.join(root, ".claude", "skills", name);
     const previousBridge = findFile(previous, claudeSkill, planner);
     if (process.platform === "win32") {
@@ -185,14 +186,28 @@ function installSkill({ component, selection, adapters, previous, planner, cwd, 
     }
   }
 
-  if (component.kind === "command" && adapters.includes("grok")) {
-    const bridge = grokCommandBridge({
+  if (component.kind !== "command") return;
+  for (const agent of commandBridgeAgents.filter((candidate) => adapters.includes(candidate))) {
+    const bridge = commandBridge({
+      agent,
       component,
       scope: selection.scope,
       cwd,
       home,
       canonical: path.join(canonicalDirectory, "SKILL.md"),
     });
+    // Earlier Claude adapters linked the whole canonical folder here. Replace
+    // that link instead of writing the wrapper through it.
+    const directory = path.dirname(bridge.file);
+    const link = planner.state(directory);
+    if (link.kind === "symlink") {
+      const previousLink = findFile(previous, directory, planner);
+      planner.delete(directory, {
+        owned: Boolean(previousLink) || link.target === path.relative(path.dirname(directory), canonicalDirectory),
+        expectedKind: "symlink",
+        expectedTarget: previousLink?.target,
+      });
+    }
     const previousBridge = findFile(previous, bridge.file, planner);
     const current = planner.state(bridge.file);
     planner.write(bridge.file, bridge.content, {
@@ -202,7 +217,7 @@ function installSkill({ component, selection, adapters, previous, planner, cwd, 
     entry.files.push(fileRecord(bridge.file, "file", planner, {
       integrity: integrity(bridge.content),
       created: previousBridge?.created ?? current.kind === "missing",
-      grokCommandBridge: true,
+      [`${agent}CommandBridge`]: true,
     }));
   }
 }
@@ -276,109 +291,21 @@ function removeStaleFiles(previous, next, planner) {
 function removeFiles(files = [], planner) {
   for (const record of files) {
     if (record.kind === "block") continue;
-    planner.delete(resolvePortablePath(record.path, planner), {
+    const file = resolvePortablePath(record.path, planner);
+    // An adopted file existed before installation, so removal leaves it to its owner.
+    if (record.created === false) {
+      if (planner.state(file).kind !== "missing") {
+        planner.note(`${record.path}: kept because it existed before installation; delete it manually if no longer needed`);
+      }
+      continue;
+    }
+    planner.delete(file, {
       owned: true,
       expectedKind: record.kind,
       expectedIntegrity: record.integrity,
       expectedTarget: record.target,
     });
   }
-}
-
-function reconcileClaudeBridge({ manifest, previousLock, nextLock, planner, cwd, force }) {
-  const needsBridge = manifest.adapters.includes("claude")
-    && manifest.components.some(({ id }) => getComponent(id)?.kind === "block");
-  const previous = previousLock.bridges?.claudeAgents;
-  const file = path.join(cwd, "CLAUDE.md");
-
-  if (!needsBridge) {
-    if (previous?.managed === "symlink" && previous.owned) {
-      planner.delete(file, { owned: true, expectedKind: "symlink", expectedTarget: previous.target });
-    } else if (previous?.managed === "block") {
-      const current = planner.state(file);
-      if (current.kind === "file") {
-        const payload = managedPayload(current.content, "bridge/agents-md");
-        if (payload && integrity(payload) !== bridgeIntegrity && !force) {
-          throw new ConflictError("Claude AGENTS.md bridge has local changes");
-        }
-        const result = removeClaudeBridge(current.content);
-        if (!result && previous.created) planner.delete(file, { owned: true, expectedKind: "file" });
-        else planner.write(file, result, { allowExisting: true });
-      }
-    }
-    return;
-  }
-
-  const current = planner.state(file);
-  if (current.kind === "symlink" && current.target === "AGENTS.md") {
-    nextLock.bridges.claudeAgents = {
-      path: portablePath(file, planner),
-      managed: "symlink",
-      target: "AGENTS.md",
-      owned: previous?.managed === "symlink" ? previous.owned : false,
-    };
-    return;
-  }
-
-  if (previous?.managed === "symlink"
-    && !new Set(["missing", "file"]).has(current.kind)
-    && !force) {
-    throw new ConflictError("Claude AGENTS.md bridge points elsewhere; preserve it or run update --force to restore agent-suitup bridge");
-  }
-  if (previous?.managed === "block"
-    && !new Set(["missing", "file"]).has(current.kind)
-    && !force) {
-    throw new ConflictError("Claude AGENTS.md import changed type; preserve it or run update --force after reviewing the path");
-  }
-
-  if (current.kind === "missing" && process.platform !== "win32") {
-    planner.symlink(file, "AGENTS.md", { linkType: "file", owned: Boolean(previous?.owned) });
-    nextLock.bridges.claudeAgents = {
-      path: portablePath(file, planner),
-      managed: "symlink",
-      target: "AGENTS.md",
-      owned: true,
-    };
-    return;
-  }
-
-  if (!new Set(["missing", "file"]).has(current.kind)) {
-    if (!force) throw new ConflictError(`Cannot create Claude bridge at ${planner.label(file)}`);
-    planner.symlink(file, "AGENTS.md", { linkType: "file", owned: true });
-    nextLock.bridges.claudeAgents = {
-      path: portablePath(file, planner),
-      managed: "symlink",
-      target: "AGENTS.md",
-      owned: true,
-    };
-    return;
-  }
-
-  const document = current.kind === "file" ? current.content : "";
-  const payload = managedPayload(document, "bridge/agents-md");
-  if (payload && integrity(payload) !== bridgeIntegrity && !force) {
-    throw new ConflictError("Claude AGENTS.md bridge has local changes");
-  }
-  if (!payload && hasAgentsImport(document)) {
-    nextLock.bridges.claudeAgents = {
-      path: portablePath(file, planner),
-      managed: "import",
-      owned: false,
-    };
-    return;
-  }
-  planner.write(file, upsertClaudeBridge(document), { allowExisting: true });
-  nextLock.bridges.claudeAgents = {
-    path: portablePath(file, planner),
-    managed: "block",
-    integrity: bridgeIntegrity,
-    created: previous?.created ?? current.kind === "missing",
-    owned: true,
-  };
-}
-
-function hasAgentsImport(document) {
-  return /^@AGENTS\.md\s*$/mu.test(document);
 }
 
 function validateSelection(component, selection, adapters) {
@@ -388,10 +315,6 @@ function validateSelection(component, selection, adapters) {
   if (component.adapters
     && !adapters.some((adapter) => component.adapters.includes(adapter))) {
     throw new Error(`${component.id} requires one of these adapters: ${component.adapters.join(", ")}`);
-  }
-  const missingCommands = missingPrerequisiteCommands(component);
-  if (missingCommands.length) {
-    throw new Error(`${component.id} requires commands that are not available: ${missingCommands.join(", ")}`);
   }
 }
 
@@ -449,7 +372,7 @@ function localSkillPackage(previous, canonicalDirectory, planner, force) {
     files.push({
       path: path.relative(canonicalDirectory, absolute).split(path.sep).join("/"),
       content: normalizeText(current.content),
-      mode: current.mode & 0o777,
+      mode: current.mode & 0o111 ? 0o755 : 0o644,
     });
   }
   return files.sort((left, right) => left.path.localeCompare(right.path));

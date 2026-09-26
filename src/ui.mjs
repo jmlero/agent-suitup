@@ -157,7 +157,9 @@ export function formatProgress(message) {
   return `${paint("35", "◇")} ${paint("1", message)}`;
 }
 
-export function formatApplySummary(planner, { components = [], action = "Applied", reviewed = false } = {}) {
+export function formatApplySummary(planner, {
+  components = [], action = "Applied", reviewed = false, suggestMore = false,
+} = {}) {
   const operations = planner.operations();
   if (!operations.length && !planner.notes.length) return "No file changes.";
   const output = [];
@@ -170,7 +172,7 @@ export function formatApplySummary(planner, { components = [], action = "Applied
     `${paint("32", "╰─")} ${paint("1;32", action)} · ${operations.length} file change${operations.length === 1 ? "" : "s"}`,
     `   ${paint("2", "Next")}  agent-suitup doctor`,
   ];
-  if (action === "Agent Suitup ready") footer.push(`   ${paint("2", "More")}  agent-suitup add --interactive`);
+  if (suggestMore) footer.push(`   ${paint("2", "More")}  agent-suitup add --interactive`);
   const commands = components.filter(({ kind }) => kind === "command");
   const skills = components.filter(({ kind }) => kind === "skill");
   if (skills.length && !/removed/i.test(action)) {
@@ -270,7 +272,7 @@ export function paint(code, value) {
 }
 
 function useColor() {
-  if (Object.hasOwn(process.env, "NO_COLOR")) return false;
+  if (process.env.NO_COLOR) return false;
   if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== "0") return true;
   return Boolean(process.stdout.isTTY && process.env.TERM !== "dumb");
 }

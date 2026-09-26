@@ -359,16 +359,3 @@ test("remote skill directories are pinned, normalized, checksummed, and complete
   assert.equal(await lockedRemoteContent(component, resolved.source), await remoteContent(component));
 });
 
-test("Claude marketplace adapters package only canonical skills", () => {
-  const marketplace = JSON.parse(fs.readFileSync(path.join(repository, ".claude-plugin", "marketplace.json"), "utf8"));
-  assert.equal(marketplace.plugins.length, 3);
-  for (const plugin of marketplace.plugins) {
-    assert.equal(plugin.source, "./");
-    assert.equal(plugin.strict, false);
-    assert.equal(plugin.license, "Apache-2.0");
-    assert.ok(plugin.skills.length > 0, plugin.name);
-    for (const componentPath of plugin.skills) {
-      assert.ok(fs.existsSync(path.resolve(repository, componentPath)), `${plugin.name}: ${componentPath}`);
-    }
-  }
-});

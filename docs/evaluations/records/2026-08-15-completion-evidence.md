@@ -2,7 +2,8 @@
 
 - Date: 2026-08-15
 - Evaluator/reviewer: GPT-5 Codex, single-session non-blinded calibration
-- Model and settings: current Codex session; no independent repetitions
+- Model and settings: GPT-5 Codex with inherited runtime defaults; exact build
+  and sampling settings were not captured; no independent repetitions
 - Repository revision/fixture: `agent-suitup` working tree, completion-report
   scenarios below
 - Candidate source and revision: `jmlero/app-meerkat` at

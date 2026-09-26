@@ -30,9 +30,11 @@ export function componentGuide(component, { scope = "project", adapters = [], re
   if (component.kind === "skill" || component.kind === "command") {
     sections.push(["How to use", component.kind === "skill"
       ? `Ask your agent to use ${name} for a matching task. The skill body loads on demand; discovery metadata may remain visible.`
-      : `Invoke $${name} in Codex, /${name} in Claude or Grok with the corresponding adapter.`]);
+      : `Invoke $${name} in Codex, or /${name} in Claude or Grok with the corresponding adapter. None of them starts it on its own.`]);
     sections.push(["Agent setup", adapters.includes("claude")
-      ? `Claude bridge: ${root}.claude/skills/${name}. Portable files stay canonical.`
+      ? component.kind === "command"
+        ? `Claude wrapper: ${root}.claude/skills/${name}/SKILL.md (slash-only). Portable files stay canonical.`
+        : `Claude bridge: ${root}.claude/skills/${name}. Portable files stay canonical.`
       : "Portable files work directly with compatible agents. Choose Claude in Connect to add its skill bridge."]);
   }
   if (component.requires?.commands?.length) sections.push(["Requires", `${component.requires.commands.join(", ")} on PATH (not installed by agent-suitup)`]);

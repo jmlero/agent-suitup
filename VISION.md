@@ -71,10 +71,8 @@ Portable skills and commands live in `.agents/skills`. Codex and Grok Build use
 the canonical files directly. Thin adapters expose them to other agents without
 duplicating the core content.
 
-For Claude Code, `CLAUDE.md` should be a symlink to `AGENTS.md` when a new bridge
-can be created safely. An existing user-authored `CLAUDE.md` is preserved and
-receives a managed `@AGENTS.md` import instead. Claude-only guidance remains an
-intentional overlay rather than being copied into the portable file.
+`AGENTS.md` is the only instruction file agent-suitup writes. Claude Code reads
+it directly, so agent-suitup never creates, edits, or links `CLAUDE.md`.
 
 ### Assessment before installation
 

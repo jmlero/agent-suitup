@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { integrity } from "./integrity.mjs";
 import { portablePath } from "./paths.mjs";
+import { statePaths } from "./state.mjs";
 
 export class ConflictError extends Error {}
 
@@ -17,15 +18,19 @@ export class Planner {
 
   state(file) {
     const absolute = path.resolve(file);
-    return this.virtual.has(absolute) ? this.virtual.get(absolute) : readState(absolute);
+    if (this.virtual.has(absolute)) return this.virtual.get(absolute);
+    // Nothing remains beneath a path this plan deletes, such as a linked folder.
+    if (ancestors(absolute).some((parent) => this.virtual.get(parent)?.kind === "missing")) {
+      return { kind: "missing" };
+    }
+    return readState(absolute);
   }
 
   write(file, content, options = {}) {
     const absolute = path.resolve(file);
     const current = this.state(absolute);
-    const mode = options.mode ?? 0o644;
-    const sameMode = current.kind === "file" && (current.mode & 0o777) === mode;
-    if (current.kind === "file" && current.content === content && sameMode) return;
+    const mode = targetMode(current, options.mode);
+    if (current.kind === "file" && current.content === content && (current.mode & 0o777) === mode) return;
 
     if (current.kind !== "missing" && current.kind !== "file") {
       throw new ConflictError(`Cannot write ${this.label(absolute)}: it is a ${current.kind}`);
@@ -99,12 +104,20 @@ export class Planner {
   apply() {
     const operations = this.operations();
     // Check the whole change set before writing any content or stored state.
+    // A path beneath a planned deletion is checked through that deletion,
+    // which sorts and runs first.
+    const deleted = new Set(operations.filter(({ after }) => after.kind === "missing").map(({ path: file }) => file));
     for (const operation of operations) {
+      if (ancestors(operation.path).some((parent) => deleted.has(parent))) continue;
       if (!sameState(operation.before, readState(operation.path))) {
         throw new ConflictError(`Path changed after planning: ${operation.label}. Rerun the command to review current files.`);
       }
     }
-    for (const operation of operations) {
+    // Write stored state last, so a failed content change leaves the previous
+    // manifest and lockfile describing the files on disk.
+    const stateDirectory = path.resolve(statePaths(this.cwd).directory);
+    const isState = (operation) => path.dirname(operation.path) === stateDirectory;
+    for (const operation of [...operations.filter((operation) => !isState(operation)), ...operations.filter(isState)]) {
       const parent = path.dirname(operation.path);
       if (operation.after.kind === "write") {
         fs.mkdirSync(parent, { recursive: true });
@@ -158,6 +171,23 @@ export class Planner {
   }
 }
 
+// A requested mode only decides whether a file is executable; the remaining
+// permission bits of an existing file belong to its owner.
+function targetMode(current, requested) {
+  if (current.kind !== "file") return requested ?? 0o644;
+  const existing = current.mode & 0o777;
+  if (requested === undefined) return existing;
+  return requested & 0o111 ? existing | ((existing & 0o444) >> 2) : existing & ~0o111;
+}
+
+function ancestors(file) {
+  const parents = [];
+  for (let parent = path.dirname(file); parent !== path.dirname(parent); parent = path.dirname(parent)) {
+    parents.push(parent);
+  }
+  return parents;
+}
+
 function materializedState(operation) {
   if (operation.kind === "write") {
     return { kind: "file", content: operation.content, mode: operation.mode };
@@ -187,7 +217,14 @@ function formatOperation(operation) {
   if (before.kind === "missing") {
     return [`CREATE ${label}`, ...prefixLines(after.content, "+")].join("\n");
   }
-  return [`UPDATE ${label}`, ...compactDiff(before.content, after.content)].join("\n");
+  const modeChange = before.kind === "file" && (before.mode & 0o777) !== (after.mode & 0o777)
+    ? ` (mode ${octal(before.mode)} -> ${octal(after.mode)})` : "";
+  const diff = before.content === after.content ? [] : compactDiff(before.content ?? "", after.content);
+  return [`UPDATE ${label}${modeChange}`, ...diff].join("\n");
+}
+
+function octal(mode) {
+  return (mode & 0o777).toString(8).padStart(3, "0");
 }
 
 function compactDiff(before, after) {

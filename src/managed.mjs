@@ -43,18 +43,6 @@ export function managedPayload(document, id) {
   return normalizeText(body);
 }
 
-export function upsertClaudeBridge(document) {
-  const bridge = {
-    id: "bridge/agents-md",
-    version: "1",
-  };
-  return upsertManagedBlock(document, bridge, "@AGENTS.md\n");
-}
-
-export function removeClaudeBridge(document) {
-  return removeManagedBlock(document, "bridge/agents-md");
-}
-
 export function findManagedRange(document, id) {
   const formats = [
     { format: "compact", startMarker: `<!--as:${id}-->`, endMarker: `<!--/as:${id}-->` },

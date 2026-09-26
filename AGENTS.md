@@ -5,8 +5,8 @@ Applies to the entire public repository.
 ## Project
 
 Keep `agent-suitup` a dependency-free Node.js 20+ ESM CLI. `catalog/` owns
-canonical portable content; `src/` implements the lifecycle; `adapters/` packages
-agent-specific assets.
+canonical portable content; `src/` implements the lifecycle; `src/adapters/`
+generates agent-specific assets.
 
 ## Rules
 

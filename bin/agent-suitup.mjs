@@ -127,7 +127,7 @@ async function initialize({ cwd, home, flags }) {
     console.log(`\n${formatSetupStep(3)}`);
     await applyDesired({
       cwd, home, manifest, flags, writeManifest: true,
-      displayComponents: components, action: "Agent Suitup ready", prompt,
+      displayComponents: components, action: "agent-suitup ready", suggestMore: true, prompt,
     });
   } finally {
     prompt.close();
@@ -251,7 +251,7 @@ async function update({ cwd, home, flags }) {
     writeManifest: false,
     refreshRemote: true,
     displayComponents: manifest.components.map(({ id }) => requireComponent(id)),
-    action: "Agent Suitup updated",
+    action: "agent-suitup updated",
   });
 }
 
@@ -260,12 +260,15 @@ async function doctor({ cwd, home, flags }) {
   const previousLock = readLock(cwd);
   const result = await reconcile({ cwd, home, manifest, previousLock, force: false });
   const lockMatches = jsonDocument(previousLock) === jsonDocument(result.lock);
-  if (!result.planner.hasChanges() && lockMatches) {
+  const drift = result.planner.hasChanges() || !lockMatches;
+  if (!drift && !result.missingPrerequisites.length) {
     console.log(formatHealthy(manifest.components.length, result.planner.notes.length > 0));
     return;
   }
 
-  console.error("Drift or an available catalog update was detected:");
+  console.error(drift
+    ? "Drift or an available catalog update was detected:"
+    : "Installed components are missing required commands:");
   console.error(formatPlan(result.planner));
   if (!lockMatches) console.error("Lockfile metadata differs from the catalog or manifest.");
   process.exitCode = 1;
@@ -295,6 +298,7 @@ async function applyDesired({
   refreshRemote = false,
   displayComponents = [],
   action = "Applied",
+  suggestMore = false,
   prompt,
 }) {
   if (output.isTTY) console.log(formatProgress("Preparing your setup…"));
@@ -336,7 +340,9 @@ async function applyDesired({
     }
   }
   result.planner.apply();
-  console.log(formatApplySummary(result.planner, { components: displayComponents, action, reviewed: Boolean(prompt) }));
+  console.log(formatApplySummary(result.planner, {
+    components: displayComponents, action, reviewed: Boolean(prompt), suggestMore,
+  }));
 }
 
 function componentScope(component, requested) {
@@ -509,7 +515,8 @@ Options:
   --dry-run       Print exact changes without writing
   --force         Replace drifted managed content
   --scope VALUE   Default project or user scope
-  --adapter VALUE Optional vendor adapter: claude, grok, or none
+  --adapter VALUE Vendor adapters: claude, grok, claude,grok, or none
+                  (alias --adapters); installing replaces the adapter set
   -h, --help      Show help
   --version       Show version
 
@@ -517,8 +524,9 @@ Portable content installs canonically for every agent. Codex and Grok read the
 canonical files directly; adapters add only vendor-specific edges.
 
 Run init to explore the full catalog, connect your agent, and review.
-Tab or 1-5 switches categories; arrows browse; Space selects; i opens a full
-guide; / searches; s shows your selection; Enter continues. Nothing is preselected.
+Tab, Shift+Tab, ←/→, or 1-5 switches categories; ↑/↓ browse; Space selects;
+i opens a full guide; / searches; s shows your selection; Enter continues.
+Nothing is preselected.
 Use --plain for numbered prompts. Ctrl+C cancels without writing.
 Esc clears a filter or exits the picker.
 init and add --interactive open the same control panel, including skills.
@@ -527,7 +535,8 @@ Use inspect <component> for a read-only guide with examples and install paths.
 Component sections:
   blocks        Always-on text managed inside AGENTS.md
   skills        On-demand knowledge and workflows
-  commands      Explicit Agent Skills invoked as $name in Codex or /name in Grok
+  commands      Explicit Agent Skills invoked as $name in Codex or /name in
+                Claude and Grok
   integrations  Vendor-native plugins and language servers
 `);
 }

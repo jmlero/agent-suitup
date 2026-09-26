@@ -27,8 +27,8 @@ Review**. Browse **Skills, Blocks, Commands, and Integrations** in one place,
 choose your agent and installation scope, then review the files before installing.
 Nothing is preselected. Skills can be installed on their own.
 
-- **Tab** or **1–5** switches categories. **↑ / ↓** browses, **Space** selects,
-  and **Enter** continues.
+- **Tab**, **Shift+Tab**, **← / →**, or **1–5** switches categories. **↑ / ↓**
+  browses, **Space** selects, and **Enter** continues.
 - **/** to search; Enter keeps the filter and Esc clears it. Selections survive
   filtering. **a** toggles all visible items; **n** clears the selection.
 - A detail panel explains what each item does and when it fits. **i** opens its
@@ -123,7 +123,9 @@ Explicit commands provide verification and commit workflows. Install with, for
 example, `agent-suitup add command/verify-work`.
 
 Invoke command skills as `$verify-work` or `$commit-work` in Codex, and
-`/verify-work` or `/commit-work` with the Claude or Grok adapters.
+`/verify-work` or `/commit-work` with the Claude or Grok adapters. Codex and
+both adapters block implicit invocation, so a command runs only when you invoke
+it.
 
 The CLI reports individual and aggregate block costs. Words are counted by
 splitting trimmed, normalized Markdown on whitespace; tokens are estimated as
@@ -136,20 +138,50 @@ Codex and Grok Build read the canonical instructions and skills directly.
 `--adapter grok` adds explicit command wrappers; see the
 [tested compatibility matrix](docs/grok-build-compatibility.md) for details.
 
-`--adapter claude` links skills from `.claude/skills` and prefers a
-`CLAUDE.md -> AGENTS.md` symlink. An existing `CLAUDE.md` is preserved with an
-`@AGENTS.md` import. Its other text remains a Claude-only overlay. If an owned
-symlink is replaced by a regular file, `doctor` previews the repair and `update`
-preserves that file while adding the import.
+`--adapter claude` links skills from `.claude/skills` and gives commands a
+slash-only wrapper there. Claude Code reads `AGENTS.md` directly, so
+agent-suitup never creates or edits `CLAUDE.md`.
 
-Optional Claude plugins cover frontend design, GitHub, TypeScript LSP, Pyright
-LSP, and Codex delegation. Required executables are checked before settings are
-changed. Authentication and runtime setup remain separate from installation.
+Optional Claude plugins require the `claude` adapter, which `add` enables when
+needed:
+
+| Plugin | Adds to Claude | Needs separately |
+|---|---|---|
+| `plugin/frontend-design` | Frontend design guidance | — |
+| `plugin/github` | GitHub issues, pull requests, and actions | GitHub authentication |
+| `plugin/typescript-lsp` | TypeScript language server | `typescript-language-server` on `PATH` |
+| `plugin/pyright-lsp` | Python type checking | `pyright-langserver` on `PATH` |
+| `plugin/codex` | Delegation and review through the Codex CLI | `codex` on `PATH` |
+
+Required executables are checked before settings are changed. If an installed
+plugin's executable later goes missing, `doctor` reports it and other commands
+continue. Authentication and runtime setup remain separate from installation.
 
 ```bash
 agent-suitup add command/verify-work --adapter grok
 agent-suitup add plugin/github
 ```
+
+### Choose and remove adapters
+
+`--adapter` (alias `--adapters`) accepts `claude`, `grok`, a comma-separated
+list such as `claude,grok`, or `none` for portable content only. With `list`,
+`init`, and `add --interactive`, it limits the catalog to components that work
+with those adapters.
+
+A `--adapter` flag sets the project's complete adapter set. Without the flag,
+existing adapters are kept, and choosing an agent at the setup prompt only adds
+adapters. To remove an adapter, re-add an installed component with the adapters
+to keep. agent-suitup removes the files it created for the dropped adapter;
+canonical content stays in place:
+
+```bash
+agent-suitup add block/tdd --adapter grok --dry-run
+agent-suitup add block/tdd --adapter grok
+```
+
+`--adapter none` drops every adapter. Remove Claude plugins first, because they
+require the `claude` adapter.
 
 ## Manage an installation
 
@@ -171,7 +203,9 @@ Desired components are recorded in `.agent-suitup/manifest.json`, with
 versions, pins, and integrity records in `.agent-suitup/lock.json`. Keep
 these files in version control alongside the installed content.
 
-Text outside managed blocks is preserved. Local edits and unexpected file or
+Text outside managed blocks is preserved, and so are existing file permissions.
+Removal deletes only files agent-suitup created; identical files that existed
+before installation are kept and reported. Local edits and unexpected file or
 symlink replacements are reported as conflicts. Review `--force --dry-run`
 before using `--force` to resolve destructive cleanup; directories are preserved
 and symlink targets are not followed during deletion.

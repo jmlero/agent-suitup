@@ -19,8 +19,6 @@
   },
   "license": "Apache-2.0",
   "files": [
-    ".claude-plugin/",
-    "adapters/",
     "bin/",
     "catalog/",
     "docs/",
