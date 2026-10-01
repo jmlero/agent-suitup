@@ -1,6 +1,6 @@
 interface:
   display_name: "Commit work"
-  short_description: "Create a focused, validated Git commit"
-  default_prompt: "Use $commit-work to review, validate, and create a focused commit for my current changes."
+  short_description: "Commit this session's changes and push to main"
+  default_prompt: "Use $commit-work to commit this session's changes and push them to main."
 policy:
   allow_implicit_invocation: false

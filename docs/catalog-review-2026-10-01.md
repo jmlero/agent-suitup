@@ -1,7 +1,7 @@
 # Catalog maintenance review — 2026-10-01
 
 This review records the catalog trim to its core components, four block
-revisions, two block additions, and two remote skill additions. Decisions from the [2026-08-15](catalog-review-2026-08-15.md),
+revisions, two block additions, two remote skill additions, and a command revision. Decisions from the [2026-08-15](catalog-review-2026-08-15.md),
 [2026-09-07](catalog-review-2026-09-07.md), and
 [2026-09-26](catalog-review-2026-09-26.md) reviews otherwise stand.
 
@@ -21,6 +21,18 @@ requires a new review.
 | `skill/database-migration` | **Remove.** The 2026-09-07 addition is withdrawn. |
 | `command/verify-work` | **Remove.** |
 | `skill/audit-docs` | **Shorten**, version `1.1.0`. The description no longer forbids edits unless explicitly asked. |
+
+## Command revision
+
+`command/commit-work` becomes version `2.0.0` and narrows to a trunk-based
+workflow: commit only the files changed in the current session and push them
+straight to main, with no branch or pull request. It now pushes, reversing the
+1.x promise not to, so the major version changes. The text shrinks from 163 to
+122 words. Steps covered by `block/focused-changes`, `block/completion-evidence`,
+and `block/secure-defaults` are dropped. New rules forbid bypassing hooks and
+force-pushing, and a rejected push is rebased and retried, stopping on
+conflicts. The command still runs only when invoked; projects that use branches
+or pull requests should not install it.
 
 ## Block revisions
 

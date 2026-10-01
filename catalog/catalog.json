@@ -316,15 +316,15 @@
     },
     {
       "id": "command/commit-work",
-      "version": "1.0.0",
+      "version": "2.0.0",
       "kind": "command",
       "name": "Commit work",
       "category": "Workflow command",
-      "description": "Review, validate, and create one focused Git commit while preserving unrelated work.",
+      "description": "Commit this session's changes and push them straight to main, without branches or pull requests.",
       "selection": {
-        "when": "A focused change is ready to validate and commit.",
-        "consider": "Creates a Git commit when invoked; preserves unrelated work and does not push automatically.",
-        "example": "Invoke commit-work to review, validate, and commit the current focused change."
+        "when": "You work trunk-based and commit and push to main yourself after each session.",
+        "consider": "Pushes to main when invoked; skip it if your project uses branches or pull requests.",
+        "example": "Invoke commit-work at the end of a session to commit the files it changed and push them to main."
       },
       "scopes": ["project", "user"],
       "content": {
