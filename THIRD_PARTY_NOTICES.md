@@ -60,5 +60,7 @@ no text from the article is vendored here.
 `skill/terraform-skill` installs pinned content from
 [antonbabenko/terraform-skill](https://github.com/antonbabenko/terraform-skill)
 under Apache-2.0. `skill/fastapi` installs pinned content from
-[fastapi/fastapi](https://github.com/fastapi/fastapi) under MIT. Their upstream
+[fastapi/fastapi](https://github.com/fastapi/fastapi) under MIT.
+`skill/codebase-design` and `skill/tdd` install pinned content from
+[mattpocock/skills](https://github.com/mattpocock/skills) under MIT. Their upstream
 license files are installed with each skill package.

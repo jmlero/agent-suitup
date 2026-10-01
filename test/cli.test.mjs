@@ -127,7 +127,7 @@ test("interactive init asks for agents first and installs a block through the ru
   assert.match(initialized.stdout, /01 · block\/tdd[\s\S]*72 words/);
   assert.doesNotMatch(initialized.stdout, /Install them for/);
   assert.match(initialized.stdout, /1 Agents[\s\S]*2 Choose[\s\S]*3 Review/);
-  assert.match(initialized.stdout, /Skills \(3\)[\s\S]*Skill commands \(1\)/);
+  assert.match(initialized.stdout, /Skills \(5\)[\s\S]*Skill commands \(1\)/);
   assert.doesNotMatch(initialized.stdout, /Integrations \(5\)/, "Claude Code plugins need Claude Code");
   assert.match(initialized.stdout, /AGENTS\.md  adds a one-line link to \.agents\/rules\.md/);
   assert.match(initialized.stdout, /agent-suitup ready[\s\S]*More\s+agent-suitup add --interactive/);
@@ -149,7 +149,7 @@ test("interactive init confirms the aggregate cost before installing every block
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Always on\s+591 words · ~963 tokens per session/);
+  assert.match(initialized.stdout, /Always on\s+578 words · ~933 tokens per session/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.equal(manifest.components.length, 9);
@@ -265,7 +265,7 @@ test("interactive init installs a plugin directly from the unified catalog", asy
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Integrations \(5\)/);
-  assert.match(initialized.stdout, /14 · plugin\/frontend-design/);
+  assert.match(initialized.stdout, /16 · plugin\/frontend-design/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, ["claude"]);
@@ -832,7 +832,7 @@ test("sectioned catalog exposes commands as complete portable skills", (context)
   assert.equal(listed.status, 0, listed.stderr);
   for (const section of [
     "Blocks \\(9\\)",
-    "Skills \\(3\\)",
+    "Skills \\(5\\)",
     "Skill commands \\(1\\)",
     "Integrations \\(5\\)",
   ]) assert.match(listed.stdout, new RegExp(section));

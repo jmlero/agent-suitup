@@ -1,7 +1,7 @@
 # Catalog maintenance review — 2026-10-01
 
 This review records the catalog trim to its core components, four block
-revisions, and two block additions. Decisions from the [2026-08-15](catalog-review-2026-08-15.md),
+revisions, two block additions, and two remote skill additions. Decisions from the [2026-08-15](catalog-review-2026-08-15.md),
 [2026-09-07](catalog-review-2026-09-07.md), and
 [2026-09-26](catalog-review-2026-09-26.md) reviews otherwise stand.
 
@@ -34,6 +34,13 @@ requires a new review.
 Each addition targets a common agent failure that the earlier wording did not
 name. These are editorial decisions, not measured behavioral improvements.
 
+A later pass shortens `block/secure-defaults` to version `1.3.0`, its largest
+block, from 88 to 75 words. "Use parameterized queries" is dropped because the
+ban on building SQL from untrusted strings already implies it; least privilege
+joins the authentication sentence; and "retaining diagnostic detail
+server-side" is dropped as the one rule agents rarely break. The input bounds
+and the recorded-risk clause are unchanged.
+
 ## Block additions
 
 Both additions, and the completion-evidence extension above, apply guidance from
@@ -52,5 +59,21 @@ design-habit exclusion lists (project taste; `plugin/frontend-design` covers
 design), and prompt hygiene such as removing "think carefully" lines (no block
 contains such filler).
 
-Aggregate always-loaded block text grows from 365 to 591 words (about 963
-tokens) when all blocks are installed.
+Aggregate always-loaded block text grows from 365 to 578 words (about 933
+tokens) when all blocks are installed, after the secure-defaults shortening.
+
+## Skill additions
+
+Both skills install pinned content from [mattpocock/skills](https://github.com/mattpocock/skills)
+at revision `d81f3a183412e71a5b1e84ca21bc1a35eea03a60` under MIT, with their
+reference files and the upstream license. Each load is on demand, so neither adds
+always-loaded context.
+
+| Component | Rationale | Decision |
+|---|---|---|
+| `skill/codebase-design` | Gives agents one vocabulary (module, interface, depth, seam, adapter) and principles for deepening shallow modules and placing seams, with references on dependency categories and comparing alternative interfaces. A block would put roughly 1,700 tokens in every session for work that only some tasks need. The overlay reads `GLOSSARY.md` only when present and lets agents without sub-agents draft the Design It Twice alternatives themselves. | **Add**, version `1.0.0`, about 1,700 tokens with its overlay. |
+| `skill/tdd` | Adds what `block/tdd` leaves out: where tests go (seams), mocking rules, and tautological, implementation-coupled, and horizontally sliced tests. The block keeps the always-on test-first rule; the skill is the on-demand detail. Upstream requires confirming every seam with the user and keeps refactoring out of the loop. The overlay asks for confirmation only when the task does not establish the seams, consistent with `block/autonomy`, allows refactoring touched code after green as `block/tdd` asks, and treats the `codebase-design` and `code-review` skills as optional. | **Add**, version `1.0.0`, about 1,000 tokens with its overlay. |
+
+The skills overlap with `block/tdd` and `block/ponytail` on mocking and minimal
+changes but do not contradict them once the overlay is applied. These are
+editorial decisions, not measured behavioral improvements.

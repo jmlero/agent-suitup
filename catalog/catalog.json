@@ -95,7 +95,7 @@
     },
     {
       "id": "block/secure-defaults",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "kind": "block",
       "name": "Secure defaults",
       "category": "Security",
@@ -265,6 +265,54 @@
       "license": "MIT",
       "context": { "loading": "on-demand", "estimatedTokens": 2700 },
       "suggest": { "when": { "all": ["hasFastAPI"] }, "reason": "FastAPI detected" }
+    },
+    {
+      "id": "skill/codebase-design",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "Codebase design",
+      "category": "Community",
+      "description": "Shared vocabulary and principles for designing deep modules, placing seams, and keeping interfaces testable.",
+      "selection": {
+        "when": "You design or restructure module interfaces, look for modules to deepen, or decide where a seam belongs.",
+        "consider": "Downloads upstream content and references when selected. Uses a fixed vocabulary (module, interface, seam, adapter); its Design It Twice process runs parallel sub-agents when asked to compare interfaces.",
+        "example": "Ask: Use codebase-design to find shallow modules worth deepening in src/."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "remote",
+        "url": "https://raw.githubusercontent.com/mattpocock/skills/d81f3a183412e71a5b1e84ca21bc1a35eea03a60/skills/engineering/codebase-design/SKILL.md",
+        "upstream": "mattpocock/skills",
+        "root": "skills/engineering/codebase-design",
+        "overlay": "overlays/codebase-design.md",
+        "licensePath": "LICENSE"
+      },
+      "license": "MIT",
+      "context": { "loading": "on-demand", "estimatedTokens": 1700 }
+    },
+    {
+      "id": "skill/tdd",
+      "version": "1.0.0",
+      "kind": "skill",
+      "name": "TDD workflow",
+      "category": "Community",
+      "description": "Red-green test-driven workflow with guidance on test seams, mocking, and test anti-patterns.",
+      "selection": {
+        "when": "You build features or fix bugs test-first and want guidance on where tests go and which tests are worth keeping.",
+        "consider": "Downloads upstream content and references when selected. Adds on-demand detail to block/tdd. Asks you to agree the seams under test when the task does not establish them, and uses codebase-design for interface vocabulary when it is installed.",
+        "example": "Ask: Use tdd to add the discount rule test-first."
+      },
+      "scopes": ["project", "user"],
+      "content": {
+        "kind": "remote",
+        "url": "https://raw.githubusercontent.com/mattpocock/skills/d81f3a183412e71a5b1e84ca21bc1a35eea03a60/skills/engineering/tdd/SKILL.md",
+        "upstream": "mattpocock/skills",
+        "root": "skills/engineering/tdd",
+        "overlay": "overlays/tdd.md",
+        "licensePath": "LICENSE"
+      },
+      "license": "MIT",
+      "context": { "loading": "on-demand", "estimatedTokens": 1000 }
     },
     {
       "id": "command/commit-work",

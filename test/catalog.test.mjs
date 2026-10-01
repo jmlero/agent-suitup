@@ -32,7 +32,7 @@ const appMeerkatBlockIds = [
 test("catalog contains the reviewed block-first component set", () => {
   const components = listComponents();
   const ids = components.map(({ id }) => id);
-  assert.equal(components.length, 18);
+  assert.equal(components.length, 20);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of [
     "block/tdd",
@@ -44,6 +44,8 @@ test("catalog contains the reviewed block-first component set", () => {
     "skill/audit-docs",
     "skill/terraform-skill",
     "skill/fastapi",
+    "skill/codebase-design",
+    "skill/tdd",
     "command/commit-work",
     "plugin/frontend-design",
     "plugin/typescript-lsp",

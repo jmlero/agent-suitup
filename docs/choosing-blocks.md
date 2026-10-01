@@ -30,6 +30,9 @@ Example decision: adopt for a maintained parser with executable behavior tests;
 skip for a disposable interface prototype whose interactions are still being
 decided.
 
+For on-demand guidance on test seams, mocking, and test anti-patterns, pair it
+with `skill/tdd`, which loads only when the agent uses it.
+
 ## `block/ponytail` — Minimal implementation
 
 [Read the instruction](../catalog/blocks/ponytail.md). The stable ID retains the

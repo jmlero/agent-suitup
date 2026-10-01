@@ -128,8 +128,10 @@ projects.
 | `skill/audit-docs` | Stale instructions, inaccurate docs, and broken references |
 | `skill/terraform-skill` | Version-aware Terraform and OpenTofu guidance |
 | `skill/fastapi` | Version-aware FastAPI guidance |
+| `skill/codebase-design` | Deep-module vocabulary for interfaces, seams, and testability |
+| `skill/tdd` | Test-first workflow: test seams, mocking, and test anti-patterns |
 
-FastAPI and Terraform skills are downloaded when preparing a selected
+Terraform, FastAPI, codebase-design, and tdd skills are downloaded when preparing a selected
 installation and include upstream references and licenses. The catalog pins each
 one to a reviewed upstream revision, so `update` installs new upstream content
 only after a catalog release deliberately moves that pin. Binary files keep their

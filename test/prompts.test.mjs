@@ -62,13 +62,13 @@ test("group headings are rows that select or clear their whole group", () => {
   assert.equal(picker.focusedGroup, "block");
   assert.equal(picker.focused, undefined);
   assert.match(frame(), /❯ ○ Blocks {2}always-on rules/);
-  assert.match(frame(), /9 blocks · 0 selected[\s\S]*Space selects all 9[\s\S]*All of them add 591 words \(~963 tokens\) to every session/);
+  assert.match(frame(), /9 blocks · 0 selected[\s\S]*Space selects all 9[\s\S]*All of them add 578 words \(~933 tokens\) to every session/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focusedGroup, "block", "the first heading is the top of the list");
   picker.handle(" ", { name: "space" });
   assert.deepEqual(kinds("block"), blockIds);
   assert.match(frame(), /❯ ● Blocks/);
-  assert.match(frame(), /9 selected · \+591 words always on/);
+  assert.match(frame(), /9 selected · \+578 words always on/);
   picker.handle("", { name: "down" });
   picker.handle(" ", { name: "space" });
   assert.equal(kinds("block").length, blockIds.length - 1);
@@ -83,7 +83,7 @@ test("group headings are rows that select or clear their whole group", () => {
   assert.equal(picker.focusedGroup, "skill", "moving down from the last item of a group lands on the next heading");
   picker.handle(" ", { name: "space" });
   assert.deepEqual(kinds("skill"), skillIds, "installed items are never selected");
-  assert.match(frame(), /3 skills · 2 selected · 1 installed[\s\S]*Space clears all 2/);
+  assert.match(frame(), /5 skills · 4 selected · 1 installed[\s\S]*Space clears all 4/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focused.id, blocks.at(-1).id, "moving up from a heading lands on the previous group's last item");
 
@@ -136,8 +136,8 @@ test("picker fits small terminals, scrolls to focus, and shows aggregate block c
     assert.ok(frame.length < rows, `${frame.length} lines for ${rows} rows`);
     assert.ok(frame.every((line) => Array.from(line).length <= columns - 2));
     assert.match(frame.join("\n"), /Durable task list/);
-    assert.match(frame.join("\n"), /9 selected · \+591 words always on/);
-    if (columns >= 62) assert.match(frame.join("\n"), /\(~963 tokens\)/);
+    assert.match(frame.join("\n"), /9 selected · \+578 words always on/);
+    if (columns >= 62) assert.match(frame.join("\n"), /\(~933 tokens\)/);
   }
   assert.match(pickerFrame(picker, { columns: 32, rows: 10 }).join("\n"), /Resize/);
 });
@@ -213,7 +213,7 @@ test("colored dashboards fit terminal dimensions and keep the column divider", (
   const picker = new Picker(components);
   picker.handle("3");
   const frame = pickerFrame(picker, { columns: 80, rows: 24, adapters: ["claude"] });
-  assert.match(frame[1], /\x1b\[1;7m Skills 3 \x1b\[0m/, "the active category is highlighted");
+  assert.match(frame[1], /\x1b\[1;7m Skills 5 \x1b\[0m/, "the active category is highlighted");
   const plain = frame.map(stripVTControlCharacters);
   assert.ok(plain.every((line) => displayWidth(line) <= 78));
   assert.match(plain[0], /^agent-suitup · Claude Code\s+✓ Agents › Choose › Review$/);
@@ -361,7 +361,7 @@ test("category tabs wrap before they would be truncated", () => {
     const tabRows = frame.slice(1, frame.findIndex((line) => line.startsWith("─")));
     assert.ok(tabRows.length, `${columns}: no tab row`);
     assert.ok(tabRows.every((line) => !line.includes("…") && displayWidth(line) <= columns - 2), `${columns}: ${tabRows}`);
-    assert.match(tabRows.join(" "), /All 18.*Blocks 9.*Skills 3.*Skill commands 1.*Integrations 5/);
+    assert.match(tabRows.join(" "), /All 20.*Blocks 9.*Skills 5.*Skill commands 1.*Integrations 5/);
   }
 });
 
