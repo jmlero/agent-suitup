@@ -31,12 +31,9 @@ SOFTWARE.
 ## App Meerkat
 
 `catalog/blocks/completion-evidence.md`, `transparent-shortcuts.md`,
-`secure-defaults.md`, `ci-production-parity.md`, and `no-unfinished-ui.md`, plus
-the CI-triage guidance in `catalog/commands/verify-work/SKILL.md` and responsive
-verification workflow in `catalog/skills/verify-frontend/SKILL.md`, are distilled
-from the agent guidance in
-[jmlero/app-meerkat](https://github.com/jmlero/app-meerkat), revision
-`51b77a6a0506661979bef8c6b152d8b3d4fcc3ba`, under Apache-2.0.
+`secure-defaults.md`, and `no-unfinished-ui.md` are distilled from the agent
+guidance in [jmlero/app-meerkat](https://github.com/jmlero/app-meerkat),
+revision `51b77a6a0506661979bef8c6b152d8b3d4fcc3ba`, under Apache-2.0.
 
 ## Focused changes: source of the policy idea
 

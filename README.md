@@ -102,7 +102,6 @@ tradeoffs, and links to the exact instructions.
 | `block/completion-evidence` | Report verification before claiming completion |
 | `block/transparent-shortcuts` | Make material deferred work visible |
 | `block/secure-defaults` | Protect new external boundaries by default |
-| `block/ci-production-parity` | Keep CI and production execution aligned |
 | `block/no-unfinished-ui` | Omit unavailable product paths |
 | `block/focused-changes` | Keep edits scoped, preserve unrelated work, and allow necessary supporting refactors |
 
@@ -112,11 +111,11 @@ A skill is a task workflow loaded on demand; a block is a standing rule in
 `AGENTS.md`. You can choose skills in `init`, or inspect and install one directly:
 
 ```bash
-agent-suitup inspect skill/review-pr
-agent-suitup add skill/review-pr
+agent-suitup inspect skill/audit-docs
+agent-suitup add skill/audit-docs
 ```
 
-Then ask your agent: **“Use review-pr to review this diff.”** Project skills live
+Then ask your agent: **“Use audit-docs to check this repository's docs.”** Project skills live
 in `.agents/skills/<name>/SKILL.md`, where Codex and Grok Build read them. Claude
 Code only reads `.claude/skills`, so choosing it adds a link there to the same
 folder. Add `--scope user` to install under `~/.agents/skills` for use across
@@ -124,25 +123,9 @@ projects.
 
 | Skill | Use it for |
 |---|---|
-| `skill/audit-code` | A broad production readiness audit before release |
 | `skill/audit-docs` | Stale instructions, inaccurate docs, and broken references |
-| `skill/review-pr` | A focused review of a pull request or diff |
-| `skill/verify-frontend` | Visual and interaction checks for changed interfaces |
 | `skill/terraform-skill` | Version-aware Terraform and OpenTofu guidance |
 | `skill/fastapi` | Version-aware FastAPI guidance |
-| `skill/debug-issue` | Diagnose a concrete failure and verify a focused fix when requested |
-| `skill/database-migration` | Prepare and validate schema changes or data backfills, including deployment and recovery |
-
-For example, ask **“Use debug-issue to investigate and fix this regression”** or
-**“Use database-migration to plan this schema change.”** Both are bundled and
-support project or user scope. Diagnosis, planning, and review requests preserve
-the implementation; preparing a migration does not authorize production
-execution.
-
-```bash
-agent-suitup add skill/debug-issue skill/database-migration --dry-run
-agent-suitup add skill/debug-issue skill/database-migration
-```
 
 FastAPI and Terraform skills are downloaded when preparing a selected
 installation and include upstream references and licenses. The catalog pins each
@@ -153,10 +136,10 @@ not download them. Skill bodies load on demand; agents may keep their discovery
 metadata in context.
 
 Skill commands are skills that run only when you invoke them, for workflows
-with side effects such as verifying or committing. They use the same `SKILL.md`
+with side effects such as committing. They use the same `SKILL.md`
 format; the difference is that the agent never starts them on its own. Install
-with, for example, `agent-suitup add command/verify-work`, then run
-`/verify-work` in Claude Code or Grok Build, or `$verify-work` in Codex.
+with, for example, `agent-suitup add command/commit-work`, then run
+`/commit-work` in Claude Code or Grok Build, or `$commit-work` in Codex.
 
 The CLI reports individual and aggregate block costs. Words are counted by
 splitting trimmed, normalized Markdown on whitespace; tokens are estimated as
@@ -201,7 +184,7 @@ plugin's executable later goes missing, `doctor` reports it and other commands
 continue. Authentication and runtime setup remain separate from installation.
 
 ```bash
-agent-suitup add command/verify-work --agent grok
+agent-suitup add command/commit-work --agent grok
 agent-suitup add plugin/github
 ```
 

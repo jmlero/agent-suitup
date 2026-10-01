@@ -90,7 +90,7 @@ test("runtime field sets match the schema's declared properties", () => {
 test("the manifest schema accepts exactly the manifests the CLI reads", () => {
   const manifest = normalizeManifest({
     ...emptyManifest(supportedAdapters),
-    components: [{ id: "block/tdd", scope: "project" }, { id: "skill/review-pr", scope: "user" }],
+    components: [{ id: "block/tdd", scope: "project" }, { id: "skill/audit-docs", scope: "user" }],
   });
   assert.deepEqual(schemaErrors(manifestSchema, manifest), []);
   assert.deepEqual(validateManifest(structuredClone(manifest)), manifest);

@@ -53,8 +53,7 @@ multiple providers are part of the accepted scope.
 - **Consider when:** Handoffs leave you asking which checks actually ran and
   which parts of the result remain unverified.
 - **Skip when:** Your repository or agent already requires and consistently
-  produces that evidence. If verification is only an occasional request,
-  consider the explicit `command/verify-work` workflow instead.
+  produces that evidence, or verification is only an occasional request.
 - **Tradeoff:** Every handoff carries reporting overhead. Repository-required
   checks still need a clear owner; this block does not define a project's test
   suite or guarantee that the checks chosen are sufficient.
@@ -97,24 +96,6 @@ do not create a debt item for a speculative multi-region architecture.
 
 Example decision: consider it when introducing a privileged upload endpoint;
 identify the permitted callers and size limits in the actual feature requirements.
-
-## `block/ci-production-parity` — CI and production parity
-
-[Read the instruction](../catalog/blocks/ci-production-parity.md).
-
-- **Consider when:** Production runtimes and builds have corresponding CI
-  configuration that must change together, especially when the definitions
-  live in different files.
-- **Skip when:** There is no production build to mirror, or a shared source
-  already keeps both paths aligned and your workflow verifies the result.
-- **Tradeoff:** Parity is about the relevant runtime and build behavior, not
-  identical environments. Production secrets and live services need not be
-  copied into CI. The agent still needs to discover which configurations govern
-  each path.
-
-Example decision: adopt where a runtime upgrade changes the production image
-but could leave CI testing an older runtime. The CLI's CI detection establishes
-only that CI exists; it cannot establish this mismatch or a need for the block.
 
 ## `block/no-unfinished-ui` — No unfinished UI
 

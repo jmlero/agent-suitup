@@ -167,10 +167,10 @@ input; `inspect <component>` shows a read-only guide without remote downloads.
 agent-suitup init                       # explore, connect, and review
 agent-suitup init --yes                 # assess and leave unchanged
 agent-suitup list blocks                # see exact word/token costs
-agent-suitup inspect skill/review-pr     # purpose, example, and installation
+agent-suitup inspect skill/audit-docs    # purpose, example, and installation
 agent-suitup add block/completion-evidence
-agent-suitup add skill/verify-frontend
-agent-suitup add command/verify-work
+agent-suitup add skill/audit-docs
+agent-suitup add command/commit-work
 agent-suitup add plugin/github          # optional Claude edge
 agent-suitup plan                       # preview exact changes
 agent-suitup remove <component>         # remove only owned state

@@ -23,7 +23,7 @@ test("text selection accepts IDs and bounded ranges without duplicate choices", 
   assert.deepEqual(parseSelection("none", blocks), []);
   assert.equal(parseSelection("all", blocks).length, blocks.length);
   assert.deepEqual(parseSelection("Blocks", components), blocks.map(({ id }) => id), "a group name selects the whole group");
-  assert.deepEqual(parseSelection("skill-commands, 1", components), ["command/verify-work", "command/commit-work", "block/tdd"]);
+  assert.deepEqual(parseSelection("skill-commands, 1", components), ["command/commit-work", "block/tdd"]);
   assert.throws(() => parseSelection("skills", blocks), /a group such as blocks/, "a group with no items is not a valid choice");
   for (const answer of ["0", String(blocks.length + 1), "3-1", "1-99999999999999999999", "1.5", ",", "wat", "1-2-3"]) {
     assert.throws(() => parseSelection(answer, blocks), /selection|Choose/i);
@@ -36,10 +36,10 @@ test("keyboard search preserves picks and toggles only visible results", () => {
   picker.handle(" ", { name: "space" });
   picker.handle("/");
   picker.handle("command/");
-  assert.equal(picker.visible.length, 2);
+  assert.equal(picker.visible.length, 1);
   picker.handle("", { name: "return" });
   picker.handle("a");
-  assert.deepEqual(picker.selection.map(({ id }) => id), ["block/tdd", "command/verify-work", "command/commit-work"]);
+  assert.deepEqual(picker.selection.map(({ id }) => id), ["block/tdd", "command/commit-work"]);
   picker.handle("a");
   assert.deepEqual(picker.selection.map(({ id }) => id), ["block/tdd"]);
   picker.handle("", { name: "escape" });
@@ -51,27 +51,27 @@ test("keyboard search preserves picks and toggles only visible results", () => {
 });
 
 test("group headings are rows that select or clear their whole group", () => {
-  const picker = new Picker(components, { installedIds: new Set(["skill/audit-code"]) });
+  const picker = new Picker(components, { installedIds: new Set(["skill/audit-docs"]) });
   const frame = (size = { columns: 120, rows: 40 }) => pickerFrame(picker, size).map(stripVTControlCharacters).join("\n");
   const kinds = (kind) => picker.selection.filter((component) => component.kind === kind).map(({ id }) => id);
   const blockIds = blocks.map(({ id }) => id);
-  const skillIds = components.filter(({ kind, id }) => kind === "skill" && id !== "skill/audit-code").map(({ id }) => id);
+  const skillIds = components.filter(({ kind, id }) => kind === "skill" && id !== "skill/audit-docs").map(({ id }) => id);
   assert.equal(picker.focused.id, "block/tdd", "the list starts on the first item, not its heading");
   assert.match(frame(), /\n {2}○ Blocks {2}always-on rules[^\n]*\n❯ {3}○ Test-driven development/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focusedGroup, "block");
   assert.equal(picker.focused, undefined);
   assert.match(frame(), /❯ ○ Blocks {2}always-on rules/);
-  assert.match(frame(), /8 blocks · 0 selected[\s\S]*Space selects all 8[\s\S]*All of them add 456 words \(~781 tokens\) to every session/);
+  assert.match(frame(), /7 blocks · 0 selected[\s\S]*Space selects all 7[\s\S]*All of them add 365 words \(~637 tokens\) to every session/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focusedGroup, "block", "the first heading is the top of the list");
   picker.handle(" ", { name: "space" });
   assert.deepEqual(kinds("block"), blockIds);
   assert.match(frame(), /❯ ● Blocks/);
-  assert.match(frame(), /8 selected · \+456 words always on/);
+  assert.match(frame(), /7 selected · \+365 words always on/);
   picker.handle("", { name: "down" });
   picker.handle(" ", { name: "space" });
-  assert.equal(kinds("block").length, 7);
+  assert.equal(kinds("block").length, blockIds.length - 1);
   assert.match(frame(), /◐ Blocks/, "a partial group shows a half mark");
   picker.handle("", { name: "up" });
   picker.handle(" ", { name: "space" });
@@ -83,7 +83,7 @@ test("group headings are rows that select or clear their whole group", () => {
   assert.equal(picker.focusedGroup, "skill", "moving down from the last item of a group lands on the next heading");
   picker.handle(" ", { name: "space" });
   assert.deepEqual(kinds("skill"), skillIds, "installed items are never selected");
-  assert.match(frame(), /8 skills · 7 selected · 1 installed[\s\S]*Space clears all 7/);
+  assert.match(frame(), /3 skills · 2 selected · 1 installed[\s\S]*Space clears all 2/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focused.id, blocks.at(-1).id, "moving up from a heading lands on the previous group's last item");
 
@@ -97,7 +97,7 @@ test("group headings are rows that select or clear their whole group", () => {
   picker.handle("", { name: "escape" });
 
   picker.handle("/");
-  picker.handle("deploy");
+  picker.handle("test");
   picker.handle("", { name: "return" });
   picker.handle("", { name: "home" });
   const matching = picker.visible.filter(({ kind }) => kind === picker.focusedGroup);
@@ -136,14 +136,14 @@ test("picker fits small terminals, scrolls to focus, and shows aggregate block c
     assert.ok(frame.length < rows, `${frame.length} lines for ${rows} rows`);
     assert.ok(frame.every((line) => Array.from(line).length <= columns - 2));
     assert.match(frame.join("\n"), /Focused changes/);
-    assert.match(frame.join("\n"), /8 selected · \+456 words always on/);
-    if (columns >= 62) assert.match(frame.join("\n"), /\(~781 tokens\)/);
+    assert.match(frame.join("\n"), /7 selected · \+365 words always on/);
+    if (columns >= 62) assert.match(frame.join("\n"), /\(~637 tokens\)/);
   }
   assert.match(pickerFrame(picker, { columns: 32, rows: 10 }).join("\n"), /Resize/);
 });
 
 test("categories, selection view, and full guides preserve choices and installed items", () => {
-  const picker = new Picker(components, { installedIds: new Set(["skill/audit-code"]) });
+  const picker = new Picker(components, { installedIds: new Set(["skill/audit-docs"]) });
   assert.deepEqual(picker.tabs.map(({ label }) => label), ["All", "Blocks", "Skills", "Skill commands", "Integrations"]);
   picker.handle("3");
   assert.ok(picker.visible.every(({ kind }) => kind === "skill"));
@@ -173,7 +173,7 @@ test("categories, selection view, and full guides preserve choices and installed
   picker.handle("a");
   assert.equal(picker.selection.filter(({ kind }) => kind === "skill").length,
     components.filter(({ kind }) => kind === "skill").length - 1);
-  assert.ok(!picker.selected.has("skill/audit-code"));
+  assert.ok(!picker.selected.has("skill/audit-docs"));
   picker.handle("", { name: "tab", shift: true });
   assert.equal(picker.tab, "block");
 });
@@ -213,7 +213,7 @@ test("colored dashboards fit terminal dimensions and keep the column divider", (
   const picker = new Picker(components);
   picker.handle("3");
   const frame = pickerFrame(picker, { columns: 80, rows: 24, adapters: ["claude"] });
-  assert.match(frame[1], /\x1b\[1;7m Skills 8 \x1b\[0m/, "the active category is highlighted");
+  assert.match(frame[1], /\x1b\[1;7m Skills 3 \x1b\[0m/, "the active category is highlighted");
   const plain = frame.map(stripVTControlCharacters);
   assert.ok(plain.every((line) => displayWidth(line) <= 78));
   assert.match(plain[0], /^agent-suitup · Claude Code\s+✓ Agents › Choose › Review$/);
@@ -361,7 +361,7 @@ test("category tabs wrap before they would be truncated", () => {
     const tabRows = frame.slice(1, frame.findIndex((line) => line.startsWith("─")));
     assert.ok(tabRows.length, `${columns}: no tab row`);
     assert.ok(tabRows.every((line) => !line.includes("…") && displayWidth(line) <= columns - 2), `${columns}: ${tabRows}`);
-    assert.match(tabRows.join(" "), /All 23.*Blocks 8.*Skills 8.*Skill commands 2.*Integrations 5/);
+    assert.match(tabRows.join(" "), /All 16.*Blocks 7.*Skills 3.*Skill commands 1.*Integrations 5/);
   }
 });
 
@@ -468,9 +468,9 @@ test("b leaves the picker to go back only when there is a previous step, keeping
   assert.doesNotMatch(pickerFrame(first, { columns: 120, rows: 30 }).map(stripVTControlCharacters).join("\n"), /b back/);
 
   const { input, output } = fakeTerminal();
-  const result = pickComponents(offered, { input, output, back: true, selected: ["skill/review-pr"], scope: "user" });
+  const result = pickComponents(offered, { input, output, back: true, selected: ["skill/audit-docs"], scope: "user" });
   input.write("b");
-  assert.deepEqual(await result, { ids: ["skill/review-pr"], scope: "user", back: true });
+  assert.deepEqual(await result, { ids: ["skill/audit-docs"], scope: "user", back: true });
 });
 
 test("a terminal too small for the picker ignores everything except cancel", () => {
@@ -492,19 +492,17 @@ test("the picker shows the exact text a block adds and where each agent reads a 
   assert.match(frame, /\.agents\/rules\.md\s+this block, between agent-suitup markers/);
   assert.match(frame, /AGENTS\.md\s+one link line, shared by all blocks/);
   picker.handle("3");
-  picker.handle("", { name: "down" });
-  picker.handle("", { name: "down" });
   const skill = pickerFrame(picker, { columns: 120, rows: 40, adapters: ["claude", "codex"] }).map(stripVTControlCharacters).join("\n");
-  assert.match(skill, /\.agents\/skills\/review-pr\/\s+Codex reads it here/);
-  assert.match(skill, /\.claude\/skills\/review-pr\s+Claude Code reads it here \((link|copy)\)/);
-  assert.match(skill, /SKILL\.md\s*\n.*│ ---\n.*│ name: review-pr/);
+  assert.match(skill, /\.agents\/skills\/audit-docs\/\s+Codex reads it here/);
+  assert.match(skill, /\.claude\/skills\/audit-docs\s+Claude Code reads it here \((link|copy)\)/);
+  assert.match(skill, /SKILL\.md\s*\n.*│ ---\n.*│ name: audit-docs/);
   picker.handle("4");
   const command = pickerFrame(picker, { columns: 120, rows: 40, adapters: ["grok"] }).map(stripVTControlCharacters).join("\n");
   assert.match(command, /Skill commands  run with \/name/);
   assert.match(command, /Skill command · runs when you invoke it/);
-  assert.match(command, /Run it\s+\/verify-work in Grok Build\. The agent never starts it/);
-  assert.match(command, /\.agents\/skills\/verify-work\/\s+source files/, "Grok runs commands through its wrapper");
-  assert.match(command, /\.grok\/skills\/verify-work\/SKILL\.md\s+Grok Build · \/verify-work only/);
+  assert.match(command, /Run it\s+\/commit-work in Grok Build\. The agent never starts it/);
+  assert.match(command, /\.agents\/skills\/commit-work\/\s+source files/, "Grok runs commands through its wrapper");
+  assert.match(command, /\.grok\/skills\/commit-work\/SKILL\.md\s+Grok Build · \/commit-work only/);
 });
 
 test("the agent screen starts on All agents, keeps existing ones, and needs at least one", () => {

@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { getComponent } from "../src/catalog.mjs";
 
 const repository = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const cli = path.join(repository, "bin", "agent-suitup.mjs");
@@ -25,6 +26,7 @@ test("non-interactive assessment never treats stack or adapter signals as consen
   fs.writeFileSync(path.join(fixture.project, "package.json"), JSON.stringify({
     devDependencies: { typescript: "^5.0.0" },
   }));
+  fs.writeFileSync(path.join(fixture.project, "README.md"), "# Project\n");
 
   const adapted = run(fixture, "init", "--yes", "--adapter", "claude");
   assert.equal(adapted.status, 0, adapted.stderr);
@@ -75,7 +77,7 @@ test("non-interactive assessment preserves local drift even with force", (contex
 test("non-interactive assessment cannot enable or disable existing adapters", (context) => {
   for (const adapter of ["none", "claude"]) {
     const fixture = makeFixture(context);
-    const components = ["block/tdd", "command/verify-work"];
+    const components = ["block/tdd", "command/commit-work"];
     if (adapter === "claude") components.push("plugin/github");
     const added = run(fixture, "add", ...components, "--adapter", adapter);
     assert.equal(added.status, 0, added.stderr);
@@ -120,12 +122,12 @@ test("interactive init asks for agents first and installs a block through the ru
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Which coding agents do you use\?\n.*\n  all  All agents\s+recommended · every item works in every agent\n  1    Claude Code[\s\S]*2    Codex[\s\S]*3    Grok Build/);
   assert.match(initialized.stdout, /Agents: Codex/);
-  assert.match(initialized.stdout, /Blocks \(8\)/);
+  assert.match(initialized.stdout, /Blocks \(7\)/);
   assert.match(initialized.stdout, /Always-on rules in \.agents\/rules\.md, linked from AGENTS\.md/);
-  assert.match(initialized.stdout, /01 · block\/tdd[\s\S]*65 words/);
+  assert.match(initialized.stdout, /01 · block\/tdd[\s\S]*30 words/);
   assert.doesNotMatch(initialized.stdout, /Install them for/);
   assert.match(initialized.stdout, /1 Agents[\s\S]*2 Choose[\s\S]*3 Review/);
-  assert.match(initialized.stdout, /Skills \(8\)[\s\S]*Skill commands \(2\)/);
+  assert.match(initialized.stdout, /Skills \(3\)[\s\S]*Skill commands \(1\)/);
   assert.doesNotMatch(initialized.stdout, /Integrations \(5\)/, "Claude Code plugins need Claude Code");
   assert.match(initialized.stdout, /AGENTS\.md  adds a one-line link to \.agents\/rules\.md/);
   assert.match(initialized.stdout, /agent-suitup ready[\s\S]*More\s+agent-suitup add --interactive/);
@@ -143,14 +145,14 @@ test("interactive init confirms the aggregate cost before installing every block
   const fixture = makeFixture(context);
   const initialized = await runInteractive(fixture, [
     [/Your agents/, "2"],
-    [/Select numbers or ranges/, "1-8"],
+    [/Select numbers or ranges/, "1-7"],
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Always on\s+456 words · ~781 tokens per session/);
+  assert.match(initialized.stdout, /Always on\s+365 words · ~637 tokens per session/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
-  assert.equal(manifest.components.length, 8);
+  assert.equal(manifest.components.length, 7);
   assert.ok(manifest.components.every(({ id }) => id.startsWith("block/")));
   assert.deepEqual(manifest.adapters, ["codex"]);
   assert.equal(count(read(fixture.project, "AGENTS.md"), "@.agents/rules.md"), 1, "all blocks share one link");
@@ -195,7 +197,7 @@ test("interactive init preserves local edits when a forced plan is declined", as
 
   const initialized = await runInteractive(fixture, [
     [/Your agents/, ""],
-    [/Select numbers or ranges/, "1-8"],
+    [/Select numbers or ranges/, "1-7"],
     [/Install this selection/, "n"],
   ], "init", "--interactive", "--force");
   assert.equal(initialized.status, 0, initialized.stderr);
@@ -205,9 +207,9 @@ test("interactive init preserves local edits when a forced plan is declined", as
 
 test("interactive init preserves existing state when the catalog selection is abandoned", async (context) => {
   const fixture = makeFixture(context);
-  const added = run(fixture, "add", "block/tdd", "command/verify-work");
+  const added = run(fixture, "add", "block/tdd", "command/commit-work");
   assert.equal(added.status, 0, added.stderr);
-  fs.unlinkSync(path.join(fixture.project, ".agents", "skills", "verify-work", "SKILL.md"));
+  fs.unlinkSync(path.join(fixture.project, ".agents", "skills", "commit-work", "SKILL.md"));
   const before = snapshotTree(fixture.root);
 
   const initialized = await runInteractive(fixture, [
@@ -229,7 +231,7 @@ test("interactive init leaves fully selected block installations unchanged", asy
 
   const initialized = await runInteractive(fixture, [
     [/Your agents/, "codex"],
-    [/Select numbers or ranges/, "1-8"],
+    [/Select numbers or ranges/, "1-7"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /block\/tdd[^\n]*installed/);
@@ -263,7 +265,7 @@ test("interactive init installs a plugin directly from the unified catalog", asy
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Integrations \(5\)/);
-  assert.match(initialized.stdout, /19 · plugin\/frontend-design/);
+  assert.match(initialized.stdout, /12 · plugin\/frontend-design/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, ["claude"]);
@@ -280,18 +282,18 @@ test("init installs skills into each chosen agent's folder", (context) => {
     const result = spawnSync(process.execPath, [cli, "init", "--interactive"], {
       cwd: fixture.project,
       env: { ...process.env, HOME: fixture.home, USERPROFILE: fixture.home, NO_COLOR: "1" },
-      encoding: "utf8", input: `${agent}\ni skill/review-pr\n${scope === "user" ? "u\n" : ""}skill/review-pr\ny\n`, timeout: 5_000,
+      encoding: "utf8", input: `${agent}\ni skill/audit-docs\n${scope === "user" ? "u\n" : ""}skill/audit-docs\ny\n`, timeout: 5_000,
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Use when[\s\S]*Example[\s\S]*Consider[\s\S]*Files[\s\S]*SKILL\.md\n[\s\S]*│ name: review-pr/);
-    assert.match(result.stdout, agent === "claude" ? /\.claude\/skills\/review-pr\s+Claude Code reads it here/ : /\.agents\/skills\/review-pr\/\s+Codex reads it here/);
-    assert.match(result.stdout, /Ask your agent: "Use review-pr/);
+    assert.match(result.stdout, /Use when[\s\S]*Example[\s\S]*Consider[\s\S]*Files[\s\S]*SKILL\.md\n[\s\S]*│ name: audit-docs/);
+    assert.match(result.stdout, agent === "claude" ? /\.claude\/skills\/audit-docs\s+Claude Code reads it here/ : /\.agents\/skills\/audit-docs\/\s+Codex reads it here/);
+    assert.match(result.stdout, /Ask your agent: "Use audit-docs/);
     const root = scope === "user" ? fixture.home : fixture.project;
-    assert.match(read(root, ".agents/skills/review-pr/SKILL.md"), /name: review-pr/);
+    assert.match(read(root, ".agents/skills/audit-docs/SKILL.md"), /name: audit-docs/);
     assert.equal(fs.existsSync(path.join(fixture.project, "AGENTS.md")), false, "skills do not need instruction blocks");
-    assert.equal(fs.existsSync(path.join(root, ".claude/skills/review-pr/SKILL.md")), agent === "claude");
+    assert.equal(fs.existsSync(path.join(root, ".claude/skills/audit-docs/SKILL.md")), agent === "claude");
     const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
-    assert.deepEqual(manifest.components, [{ id: "skill/review-pr", scope }]);
+    assert.deepEqual(manifest.components, [{ id: "skill/audit-docs", scope }]);
     assert.deepEqual(manifest.adapters, [agent]);
     assert.match(run(fixture, "doctor").stdout, /Healthy.*1 component/);
   }
@@ -312,20 +314,20 @@ test("inspect and in-menu guides are read-only, including remote skills", async 
   assert.match(everyAgent.stdout, /\.agents\/skills\/fastapi\/\s+Codex and Grok Build read it here\n\s+\.claude\/skills\/fastapi\s+Claude Code/);
   const menu = await runInteractive(fixture, [
     [/Your agents/, "codex"],
-    [/Select numbers or ranges/, "i 11"],
+    [/Select numbers or ranges/, "i 8"],
     [/Select numbers or ranges/, "i skill/fastapi"],
     [/Select numbers or ranges/, "none"],
   ], "init", "--interactive");
   assert.equal(menu.status, 0, menu.stderr);
-  assert.match(menu.stdout, /Pull request review[\s\S]*Example\s+Ask: Use review-pr/);
+  assert.match(menu.stdout, /Documentation audit[\s\S]*Example\s+Ask: Use audit-docs/);
   assert.deepEqual(snapshotTree(fixture.root), before);
 });
 
 for (const adapter of ["none", "claude", "grok"]) {
   for (const scope of ["project", "user"]) {
-    test(`debugging and migration skills support ${scope} lifecycle with ${adapter} delivery`, (context) => {
+    test(`bundled skills support ${scope} lifecycle with ${adapter} delivery`, (context) => {
       const fixture = makeFixture(context);
-      const names = ["debug-issue", "database-migration"];
+      const names = ["audit-docs"];
       const ids = names.map((name) => `skill/${name}`);
       const root = scope === "user" ? fixture.home : fixture.project;
       const otherRoot = scope === "user" ? fixture.project : fixture.home;
@@ -362,7 +364,7 @@ for (const adapter of ["none", "claude", "grok"]) {
       assert.deepEqual(manifest.components, [...ids].sort().map((id) => ({ id, scope })));
       const lock = JSON.parse(read(fixture.project, ".agent-suitup/lock.json"));
       for (const id of ids) {
-        assert.equal(lock.components[id].version, "1.0.0");
+        assert.equal(lock.components[id].version, getComponent(id).version);
         assert.equal(lock.components[id].scope, scope);
         assert.equal(lock.components[id].source.kind, "bundled");
       }
@@ -375,12 +377,12 @@ for (const adapter of ["none", "claude", "grok"]) {
       const healthy = run(fixture, "doctor");
       assert.equal(healthy.status, 0, healthy.stderr);
 
-      fs.unlinkSync(path.join(root, canonical("database-migration")));
+      fs.unlinkSync(path.join(root, canonical(names[0])));
       const repaired = run(fixture, "update");
       assert.equal(repaired.status, 0, repaired.stderr);
-      assert.equal(read(root, canonical("database-migration")), expected("database-migration"));
+      assert.equal(read(root, canonical(names[0])), expected(names[0]));
 
-      const note = ".agents/skills/debug-issue/local-notes.md";
+      const note = `.agents/skills/${names[0]}/local-notes.md`;
       fs.writeFileSync(path.join(root, note), "Keep this unowned note.\n");
       const removed = run(fixture, "remove", ...ids);
       assert.equal(removed.status, 0, removed.stderr);
@@ -399,12 +401,12 @@ test("mixed selections preserve required adapters and never infer blocks from sk
   const result = spawnSync(process.execPath, [cli, "init", "--interactive"], {
     cwd: fixture.project,
     env: { ...process.env, HOME: fixture.home, USERPROFILE: fixture.home, NO_COLOR: "1" },
-    encoding: "utf8", input: "claude\nskill/review-pr command/verify-work plugin/github\nproject\ny\n", timeout: 5_000,
+    encoding: "utf8", input: "claude\nskill/audit-docs command/commit-work plugin/github\nproject\ny\n", timeout: 5_000,
   });
   assert.equal(result.status, 0, result.stderr);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, ["claude"]);
-  assert.deepEqual(manifest.components.map(({ id }) => id), ["command/verify-work", "plugin/github", "skill/review-pr"]);
+  assert.deepEqual(manifest.components.map(({ id }) => id), ["command/commit-work", "plugin/github", "skill/audit-docs"]);
   assert.equal(fs.existsSync(path.join(fixture.project, "AGENTS.md")), false);
   assert.match(run(fixture, "doctor").stdout, /Healthy.*3 components/);
 });
@@ -438,7 +440,7 @@ test("interactive add recovers from typos and installs the chosen user scope", a
     [/Your agents/, "codex"],
     [/Select numbers or ranges/, "1-999999999999"],
     [/Select numbers or ranges/, "u"],
-    [/Select numbers or ranges/, "command/verify-work"],
+    [/Select numbers or ranges/, "command/commit-work"],
     [/Install this selection/, "maybe"],
     [/Install this selection/, "y"],
   ], "add", "--interactive");
@@ -446,29 +448,29 @@ test("interactive add recovers from typos and installs the chosen user scope", a
   assert.match(result.stdout, /Invalid selection/);
   assert.match(result.stdout, /Install for: this project\. Type u[\s\S]*Install for: all projects, in your home folder/);
   assert.doesNotMatch(result.stdout, /Install them for/);
-  assert.match(result.stdout, /Install for\s+all projects, in your home folder\n[\s\S]*Skill commands \(1\)\s+Verify work\n/);
-  assert.match(read(fixture.home, ".agents/skills/verify-work/SKILL.md"), /# Verify Work/);
+  assert.match(result.stdout, /Install for\s+all projects, in your home folder\n[\s\S]*Skill commands \(1\)\s+Commit work\n/);
+  assert.match(read(fixture.home, ".agents/skills/commit-work/SKILL.md"), /# Commit Work/);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
-  assert.deepEqual(manifest.components, [{ id: "command/verify-work", scope: "user" }]);
+  assert.deepEqual(manifest.components, [{ id: "command/commit-work", scope: "user" }]);
 });
 
 test("b steps back from the review and the catalog, keeping earlier choices", async (context) => {
   const fixture = makeFixture(context);
   const result = await runInteractive(fixture, [
     [/Your agents/, "codex"],
-    [/or b to go back to agents[\s\S]*Select numbers or ranges \[none\]/, "skill/review-pr"],
+    [/or b to go back to agents[\s\S]*Select numbers or ranges \[none\]/, "skill/audit-docs"],
     [/Install this selection\? \[Y\/n · b back · p preview\]/, "b"],
-    [/Select numbers or ranges \[skill\/review-pr\]/, "b"],
+    [/Select numbers or ranges \[skill\/audit-docs\]/, "b"],
     [/Your agents/, "claude"],
-    [/Select numbers or ranges \[skill\/review-pr\]/, ""],
+    [/Select numbers or ranges \[skill\/audit-docs\]/, ""],
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /Agents: Codex[\s\S]*Selected: Pull request review[\s\S]*Agents: Claude Code[\s\S]*Selected: Pull request review/);
+  assert.match(result.stdout, /Agents: Codex[\s\S]*Selected: Documentation audit[\s\S]*Agents: Claude Code[\s\S]*Selected: Documentation audit/);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, ["claude"]);
-  assert.deepEqual(manifest.components, [{ id: "skill/review-pr", scope: "project" }]);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".claude/skills/review-pr")));
+  assert.deepEqual(manifest.components, [{ id: "skill/audit-docs", scope: "project" }]);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".claude/skills/audit-docs")));
 });
 
 test("with --agent there is no agent step to go back to, but the review still returns to the catalog", async (context) => {
@@ -490,7 +492,7 @@ test("pressing Enter at the agent question sets up every agent", async (context)
   const fixture = makeFixture(context);
   const result = await runInteractive(fixture, [
     [/Your agents \(all, or numbers or names, e\.g\. 1,3\) \[all\]/, ""],
-    [/Select numbers or ranges/, "command/verify-work"],
+    [/Select numbers or ranges/, "command/commit-work"],
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(result.status, 0, result.stderr);
@@ -498,9 +500,9 @@ test("pressing Enter at the agent question sets up every agent", async (context)
   assert.match(result.stdout, /Integrations \(5\)/);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "codex", "grok"]);
   for (const agent of ["claude", "grok"]) {
-    assert.match(read(fixture.project, `.${agent}/skills/verify-work/SKILL.md`), /disable-model-invocation: true/);
+    assert.match(read(fixture.project, `.${agent}/skills/commit-work/SKILL.md`), /disable-model-invocation: true/);
   }
-  assert.match(read(fixture.project, ".agents/skills/verify-work/agents/openai.yaml"), /allow_implicit_invocation: false/);
+  assert.match(read(fixture.project, ".agents/skills/commit-work/agents/openai.yaml"), /allow_implicit_invocation: false/);
 });
 
 test("interactive init recovers from an invalid agent choice", async (context) => {
@@ -508,12 +510,12 @@ test("interactive init recovers from an invalid agent choice", async (context) =
   const result = await runInteractive(fixture, [
     [/Your agents/, "cloude"],
     [/Your agents/, "claude"],
-    [/Select numbers or ranges/, "skill/review-pr"],
+    [/Select numbers or ranges/, "skill/audit-docs"],
     [/Install this selection/, "n"],
   ], "init", "--interactive");
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Unknown agent: cloude/);
-  assert.match(result.stdout, /\.claude\/skills\/review-pr/);
+  assert.match(result.stdout, /\.claude\/skills\/audit-docs/);
   assert.deepEqual(fs.readdirSync(fixture.project), []);
 });
 
@@ -560,7 +562,7 @@ test("review includes existing block cost and rechecks files changed while waiti
     }],
   ], "init", "--interactive", "--force");
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /Always on\s+132 words · ~237 tokens per session/);
+  assert.match(result.stdout, /Always on\s+97 words · ~185 tokens per session/);
   assert.match(result.stderr, /Path changed after planning: \.\/\.agents\/rules\.md/);
   assert.deepEqual(snapshotTree(fixture.root), before);
 });
@@ -570,7 +572,7 @@ test("portable content installs canonically without vendor files", (context) => 
   fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), "# Team instructions\n\nKeep this text.\n");
   fs.writeFileSync(path.join(fixture.project, "CLAUDE.md"), "# Claude notes\n");
 
-  const installed = run(fixture, "add", "block/tdd", "skill/audit-code", "--agent", "none");
+  const installed = run(fixture, "add", "block/tdd", "skill/audit-docs", "--agent", "none");
   assert.equal(installed.status, 0, installed.stderr);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, []);
@@ -582,22 +584,22 @@ test("portable content installs canonically without vendor files", (context) => 
 
   const claude = read(fixture.project, "CLAUDE.md");
   assert.equal(claude, "# Claude notes\n");
-  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "audit-code", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "audit-docs", "SKILL.md")));
   assert.equal(fs.existsSync(path.join(fixture.project, ".claude")), false);
 
   const planned = run(fixture, "plan");
   assert.equal(planned.status, 0, planned.stderr);
-  assert.match(planned.stdout, /Always on\s+65 words/);
+  assert.match(planned.stdout, /Always on\s+30 words/);
   assert.match(planned.stdout, /No file changes\./);
   const healthy = run(fixture, "doctor");
   assert.equal(healthy.status, 0, healthy.stderr);
   assert.match(healthy.stdout, /Healthy.*2 components/);
 
-  const repeated = run(fixture, "add", "block/tdd", "skill/audit-code");
+  const repeated = run(fixture, "add", "block/tdd", "skill/audit-docs");
   assert.equal(repeated.status, 0, repeated.stderr);
   assert.match(repeated.stdout, /^No file changes\./);
 
-  const removed = run(fixture, "remove", "block/tdd", "skill/audit-code");
+  const removed = run(fixture, "remove", "block/tdd", "skill/audit-docs");
   assert.equal(removed.status, 0, removed.stderr);
   assert.equal(read(fixture.project, "AGENTS.md"), "# Team instructions\n\nKeep this text.\n");
   assert.equal(fs.existsSync(path.join(fixture.project, ".agents", "rules.md")), false);
@@ -684,7 +686,7 @@ test("block drift is refused and an explicit force restores only owned content",
   fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), "# User guidance\n");
   assert.equal(run(fixture, "add", "block/tdd").status, 0);
   const rules = path.join(fixture.project, ".agents", "rules.md");
-  fs.writeFileSync(rules, fs.readFileSync(rules, "utf8").replace("Make the smallest", "Locally edit the smallest"));
+  fs.writeFileSync(rules, fs.readFileSync(rules, "utf8").replace("follow TDD", "Locally edit TDD"));
 
   const doctor = run(fixture, "doctor");
   assert.equal(doctor.status, 1);
@@ -719,12 +721,12 @@ test("blocks embedded in AGENTS.md by earlier releases move to the rules file", 
   fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
   const earlier = snapshotTree(fixture.root);
 
-  const edited = read(fixture.project, "AGENTS.md").replace("Make the smallest", "Locally edit the smallest");
+  const edited = read(fixture.project, "AGENTS.md").replace("follow TDD", "Locally edit TDD");
   fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), edited);
   const refused = run(fixture, "update");
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /Managed block has local changes: block\/tdd/);
-  fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), read(fixture.project, "AGENTS.md").replace("Locally edit", "Make"));
+  fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), read(fixture.project, "AGENTS.md").replace("Locally edit", "follow"));
   assert.deepEqual(snapshotTree(fixture.root), earlier);
 
   assert.equal(run(fixture, "doctor").status, 1);
@@ -794,16 +796,15 @@ test("a component no longer in the catalog can still be removed safely", (contex
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).components, []);
 });
 
-test("installs App Meerkat guidance as compact blocks and an on-demand skill", (context) => {
+test("installs App Meerkat guidance as compact blocks", (context) => {
   const fixture = makeFixture(context);
   const blockIds = [
     "block/completion-evidence",
     "block/transparent-shortcuts",
     "block/secure-defaults",
-    "block/ci-production-parity",
     "block/no-unfinished-ui",
   ];
-  const ids = [...blockIds, "skill/verify-frontend"];
+  const ids = blockIds;
   fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), "# Existing guidance\n");
 
   const installed = run(fixture, "add", ...ids);
@@ -811,14 +812,13 @@ test("installs App Meerkat guidance as compact blocks and an on-demand skill", (
   assert.match(read(fixture.project, "AGENTS.md"), /# Existing guidance/);
   const rules = read(fixture.project, ".agents/rules.md");
   for (const id of blockIds) assert.equal(count(rules, `<!--as:${id}-->`), 1, id);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "verify-frontend", "SKILL.md")));
 
   const lock = JSON.parse(read(fixture.project, ".agent-suitup/lock.json"));
   for (const id of ids) {
     assert.equal(lock.components[id].source.upstream, "jmlero/app-meerkat");
     assert.match(lock.components[id].source.revision, /^[0-9a-f]{40}$/);
   }
-  assert.match(run(fixture, "doctor").stdout, /Healthy.*6 components/);
+  assert.match(run(fixture, "doctor").stdout, /Healthy.*4 components/);
   assert.match(run(fixture, "add", ...ids).stdout, /^No file changes\./);
 
   const removed = run(fixture, "remove", ...ids);
@@ -831,50 +831,48 @@ test("sectioned catalog exposes commands as complete portable skills", (context)
   const listed = run(fixture, "list");
   assert.equal(listed.status, 0, listed.stderr);
   for (const section of [
-    "Blocks \\(8\\)",
-    "Skills \\(8\\)",
-    "Skill commands \\(2\\)",
+    "Blocks \\(7\\)",
+    "Skills \\(3\\)",
+    "Skill commands \\(1\\)",
     "Integrations \\(5\\)",
   ]) assert.match(listed.stdout, new RegExp(section));
   assert.doesNotMatch(listed.stdout, /External tools|Hooks & automation/);
   const blocks = run(fixture, "list", "blocks");
-  assert.match(blocks.stdout, /block\/tdd[\s\S]*65 words/);
+  assert.match(blocks.stdout, /block\/tdd[\s\S]*30 words/);
   assert.match(blocks.stdout, /block\/ponytail[\s\S]*67 words/);
 
   const commands = run(fixture, "list", "commands");
   assert.equal(commands.status, 0, commands.stderr);
-  assert.match(commands.stdout, /command\/verify-work/);
   assert.match(commands.stdout, /command\/commit-work/);
   assert.doesNotMatch(commands.stdout, /block\/tdd/);
 
-  const preview = run(fixture, "add", "command/verify-work", "--dry-run");
+  const preview = run(fixture, "add", "command/commit-work", "--dry-run");
   assert.equal(preview.status, 0, preview.stderr);
-  assert.match(preview.stdout, /# Verify Work/);
+  assert.match(preview.stdout, /# Commit Work/);
   assert.match(preview.stdout, /Dry run complete/);
   assert.equal(fs.existsSync(path.join(fixture.project, ".agent-suitup")), false);
 
-  const installed = run(fixture, "add", "command/verify-work", "command/commit-work");
+  const installed = run(fixture, "add", "command/commit-work");
   assert.equal(installed.status, 0, installed.stderr);
-  assert.match(installed.stdout, /Selected[\s\S]*Skill commands\s+Verify work, Commit work/);
+  assert.match(installed.stdout, /Selected[\s\S]*Skill commands\s+Commit work/);
   // Without --agent, a new project sets up every agent.
-  assert.match(installed.stdout, /Files\n│ \+10 new/);
-  assert.match(installed.stdout, /Run\s+\/verify-work in Claude Code or Grok Build, \$verify-work in Codex\n\s+Run\s+\/commit-work/);
+  assert.match(installed.stdout, /Files\n│ \+6 new/);
+  assert.match(installed.stdout, /Run\s+\/commit-work in Claude Code or Grok Build, \$commit-work in Codex\n/);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "codex", "grok"]);
   for (const agent of ["claude", "grok"]) {
-    assert.match(read(fixture.project, `.${agent}/skills/verify-work/SKILL.md`), /disable-model-invocation: true/);
+    assert.match(read(fixture.project, `.${agent}/skills/commit-work/SKILL.md`), /disable-model-invocation: true/);
   }
-  const grokOnly = run(makeFixture(context), "add", "command/verify-work", "--agent", "grok");
-  assert.match(grokOnly.stdout, /Run\s+\/verify-work in Grok Build\n/);
-  assert.doesNotMatch(installed.stdout, /# Verify Work/);
-  for (const name of ["verify-work", "commit-work"]) {
+  const grokOnly = run(makeFixture(context), "add", "command/commit-work", "--agent", "grok");
+  assert.match(grokOnly.stdout, /Run\s+\/commit-work in Grok Build\n/);
+  assert.doesNotMatch(installed.stdout, /# Commit Work/);
+  for (const name of ["commit-work"]) {
     assert.match(read(fixture.project, `.agents/skills/${name}/SKILL.md`), new RegExp(`name: ${name}`));
     assert.match(read(fixture.project, `.agents/skills/${name}/agents/openai.yaml`), /allow_implicit_invocation: false/);
   }
-  assert.match(run(fixture, "doctor").stdout, /Healthy.*2 components/);
+  assert.match(run(fixture, "doctor").stdout, /Healthy.*1 component/);
 
-  const removed = run(fixture, "remove", "command/verify-work", "command/commit-work");
+  const removed = run(fixture, "remove", "command/commit-work");
   assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(fs.existsSync(path.join(fixture.project, ".agents", "skills", "verify-work", "SKILL.md")), false);
   assert.equal(fs.existsSync(path.join(fixture.project, ".agents", "skills", "commit-work", "SKILL.md")), false);
 });
 
@@ -882,7 +880,7 @@ test("Claude adapter exposes canonical blocks and skills without duplicating the
   const fixture = makeFixture(context);
   fs.writeFileSync(path.join(fixture.project, "CLAUDE.md"), "# Claude notes\n");
 
-  const installed = run(fixture, "add", "block/tdd", "skill/audit-code", "--adapter", "claude");
+  const installed = run(fixture, "add", "block/tdd", "skill/audit-docs", "--adapter", "claude");
   assert.equal(installed.status, 0, installed.stderr);
   assert.equal(read(fixture.project, "CLAUDE.md"), "# Claude notes\n");
   // Claude Code skips AGENTS.md when CLAUDE.md exists, so the rules would not load.
@@ -892,14 +890,14 @@ test("Claude adapter exposes canonical blocks and skills without duplicating the
   assert.doesNotMatch(run(fixture, "doctor").stdout, /Manual steps/);
   fs.writeFileSync(path.join(fixture.project, "CLAUDE.md"), "# Claude notes\n");
   if (process.platform !== "win32") {
-    assert.equal(fs.lstatSync(path.join(fixture.project, ".claude", "skills", "audit-code")).isSymbolicLink(), true);
+    assert.equal(fs.lstatSync(path.join(fixture.project, ".claude", "skills", "audit-docs")).isSymbolicLink(), true);
   }
 
   const disabled = run(fixture, "remove", "--adapter", "claude");
   assert.equal(disabled.status, 0, disabled.stderr);
   assert.equal(read(fixture.project, "CLAUDE.md"), "# Claude notes\n");
-  assert.equal(fs.existsSync(path.join(fixture.project, ".claude", "skills", "audit-code")), false);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "audit-code", "SKILL.md")));
+  assert.equal(fs.existsSync(path.join(fixture.project, ".claude", "skills", "audit-docs")), false);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "audit-docs", "SKILL.md")));
 });
 
 test("Claude reads AGENTS.md directly and never gets a CLAUDE.md", { skip: process.platform === "win32" }, (context) => {
@@ -930,34 +928,34 @@ test("Claude reads AGENTS.md directly and never gets a CLAUDE.md", { skip: proce
 
 test("cleanup refuses a user skill bridge that changed type when removing or disabling Claude", { skip: process.platform === "win32" }, (context) => {
   const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "skill/audit-code", "--scope", "user", "--adapter", "claude").status, 0);
-  const canonical = read(fixture.home, ".agents/skills/audit-code/SKILL.md");
-  const bridge = path.join(fixture.home, ".claude", "skills", "audit-code");
+  assert.equal(run(fixture, "add", "skill/audit-docs", "--scope", "user", "--adapter", "claude").status, 0);
+  const canonical = read(fixture.home, ".agents/skills/audit-docs/SKILL.md");
+  const bridge = path.join(fixture.home, ".claude", "skills", "audit-docs");
   fs.unlinkSync(bridge);
   fs.writeFileSync(bridge, "User-authored replacement.\n");
   const before = snapshotTree(fixture.root);
 
   for (const arguments_ of [
-    ["remove", "skill/audit-code"],
+    ["remove", "skill/audit-docs"],
     ["remove", "--adapter", "claude"],
   ]) {
     const refused = run(fixture, ...arguments_);
     assert.equal(refused.status, 1, refused.stdout);
-    assert.match(refused.stderr, /changed type.*audit-code/i);
+    assert.match(refused.stderr, /changed type.*audit-docs/i);
     assert.deepEqual(snapshotTree(fixture.root), before);
   }
 
   const disabled = run(fixture, "remove", "--adapter", "claude", "--force");
   assert.equal(disabled.status, 0, disabled.stderr);
   assert.equal(fs.existsSync(bridge), false);
-  assert.equal(read(fixture.home, ".agents/skills/audit-code/SKILL.md"), canonical);
+  assert.equal(read(fixture.home, ".agents/skills/audit-docs/SKILL.md"), canonical);
   assert.match(run(fixture, "doctor").stdout, /Healthy/);
 });
 
 test("cleanup refuses a skill file that changed type during removal or scope migration", { skip: process.platform === "win32" }, (context) => {
   const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "skill/audit-code").status, 0);
-  const skill = path.join(fixture.project, ".agents", "skills", "audit-code", "SKILL.md");
+  assert.equal(run(fixture, "add", "skill/audit-docs").status, 0);
+  const skill = path.join(fixture.project, ".agents", "skills", "audit-docs", "SKILL.md");
   const target = path.join(fixture.home, "custom-skill.md");
   fs.writeFileSync(target, "User-authored skill.\n");
   fs.unlinkSync(skill);
@@ -965,8 +963,8 @@ test("cleanup refuses a skill file that changed type during removal or scope mig
   const before = snapshotTree(fixture.root);
 
   for (const arguments_ of [
-    ["remove", "skill/audit-code"],
-    ["add", "skill/audit-code", "--scope", "user"],
+    ["remove", "skill/audit-docs"],
+    ["add", "skill/audit-docs", "--scope", "user"],
   ]) {
     const refused = run(fixture, ...arguments_);
     assert.equal(refused.status, 1, refused.stdout);
@@ -974,7 +972,7 @@ test("cleanup refuses a skill file that changed type during removal or scope mig
     assert.deepEqual(snapshotTree(fixture.root), before);
   }
 
-  const removed = run(fixture, "remove", "skill/audit-code", "--force");
+  const removed = run(fixture, "remove", "skill/audit-docs", "--force");
   assert.equal(removed.status, 0, removed.stderr);
   assert.throws(() => fs.lstatSync(skill), { code: "ENOENT" });
   assert.deepEqual(snapshotTree(fixture.home), before.home.entries);
@@ -983,15 +981,15 @@ test("cleanup refuses a skill file that changed type during removal or scope mig
 
 test("cleanup preserves a replacement directory even when force is explicit", (context) => {
   const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "skill/audit-code").status, 0);
-  const skill = path.join(fixture.project, ".agents", "skills", "audit-code", "SKILL.md");
+  assert.equal(run(fixture, "add", "skill/audit-docs").status, 0);
+  const skill = path.join(fixture.project, ".agents", "skills", "audit-docs", "SKILL.md");
   fs.unlinkSync(skill);
   fs.mkdirSync(skill);
   fs.writeFileSync(path.join(skill, "notes.md"), "Keep these notes.\n");
   const before = snapshotTree(fixture.root);
 
   for (const flags of [[], ["--force"]]) {
-    const refused = run(fixture, "remove", "skill/audit-code", ...flags);
+    const refused = run(fixture, "remove", "skill/audit-docs", ...flags);
     assert.equal(refused.status, 1, refused.stdout);
     assert.match(refused.stderr, /Refusing to delete directory/);
     assert.deepEqual(snapshotTree(fixture.root), before);
@@ -1000,29 +998,29 @@ test("cleanup preserves a replacement directory even when force is explicit", (c
 
 test("detects drift and refuses destructive removal unless forced", (context) => {
   const fixture = makeFixture(context);
-  const installed = run(fixture, "add", "skill/audit-code");
+  const installed = run(fixture, "add", "skill/audit-docs");
   assert.equal(installed.status, 0, installed.stderr);
-  const skill = path.join(fixture.project, ".agents", "skills", "audit-code", "SKILL.md");
+  const skill = path.join(fixture.project, ".agents", "skills", "audit-docs", "SKILL.md");
   fs.appendFileSync(skill, "\nLocal edit.\n");
 
   const doctor = run(fixture, "doctor");
   assert.equal(doctor.status, 1);
   assert.match(doctor.stderr, /local changes/i);
-  const refused = run(fixture, "remove", "skill/audit-code");
+  const refused = run(fixture, "remove", "skill/audit-docs");
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /local changes/i);
   assert.ok(fs.existsSync(skill));
 
-  const forced = run(fixture, "remove", "skill/audit-code", "--force");
+  const forced = run(fixture, "remove", "skill/audit-docs", "--force");
   assert.equal(forced.status, 0, forced.stderr);
   assert.equal(fs.existsSync(skill), false);
 });
 
 test("group-writable checkouts are not drift and keep their permissions", { skip: process.platform === "win32" }, (context) => {
   const fixture = makeFixture(context);
-  const installed = run(fixture, "add", "block/tdd", "skill/review-pr");
+  const installed = run(fixture, "add", "block/tdd", "skill/audit-docs");
   assert.equal(installed.status, 0, installed.stderr);
-  const files = ["AGENTS.md", ".agents/rules.md", ".agents/skills/review-pr/SKILL.md", ".agent-suitup/lock.json"]
+  const files = ["AGENTS.md", ".agents/rules.md", ".agents/skills/audit-docs/SKILL.md", ".agent-suitup/lock.json"]
     .map((file) => path.join(fixture.project, file));
   for (const file of files) fs.chmodSync(file, 0o664);
 
@@ -1036,20 +1034,20 @@ test("group-writable checkouts are not drift and keep their permissions", { skip
 
 test("removal keeps adopted files that existed before installation", (context) => {
   const fixture = makeFixture(context);
-  const adopted = path.join(fixture.home, ".agents", "skills", "review-pr", "SKILL.md");
-  const canonical = read(repository, "catalog/skills/review-pr/SKILL.md");
+  const adopted = path.join(fixture.home, ".agents", "skills", "audit-docs", "SKILL.md");
+  const canonical = read(repository, "catalog/skills/audit-docs/SKILL.md");
   fs.mkdirSync(path.dirname(adopted), { recursive: true });
   fs.writeFileSync(adopted, `${canonical.replace(/\r\n/g, "\n").trimEnd()}\n`);
-  const installed = run(fixture, "add", "skill/review-pr", "skill/audit-docs", "--scope", "user");
+  const installed = run(fixture, "add", "skill/audit-docs", "command/commit-work", "--scope", "user");
   assert.equal(installed.status, 0, installed.stderr);
-  const created = path.join(fixture.home, ".agents", "skills", "audit-docs", "SKILL.md");
+  const created = path.join(fixture.home, ".agents", "skills", "commit-work", "SKILL.md");
   assert.ok(fs.existsSync(created));
 
-  const removed = run(fixture, "remove", "skill/review-pr", "skill/audit-docs");
+  const removed = run(fixture, "remove", "skill/audit-docs", "command/commit-work");
   assert.equal(removed.status, 0, removed.stderr);
   assert.ok(fs.existsSync(adopted), "a file that existed before installation was deleted");
   assert.equal(fs.existsSync(created), false);
-  assert.match(removed.stdout, /~\/\.agents\/skills\/review-pr\/SKILL\.md: kept because it existed before installation/);
+  assert.match(removed.stdout, /~\/\.agents\/skills\/audit-docs\/SKILL\.md: kept because it existed before installation/);
 });
 
 test("Claude marketplace edits preserve unrelated settings", (context) => {
@@ -1184,21 +1182,21 @@ test("an interactive scope choice takes precedence over a plugin recommendation"
 
 test("Grok adapter makes portable commands slash-only without copying their workflow", (context) => {
   const fixture = makeFixture(context);
-  const installed = run(fixture, "add", "command/verify-work", "--adapter", "grok");
+  const installed = run(fixture, "add", "command/commit-work", "--adapter", "grok");
   assert.equal(installed.status, 0, installed.stderr);
 
-  const canonical = read(fixture.project, ".agents/skills/verify-work/SKILL.md");
+  const canonical = read(fixture.project, ".agents/skills/commit-work/SKILL.md");
   assert.doesNotMatch(canonical, /disable-model-invocation/);
-  const bridge = read(fixture.project, ".grok/skills/verify-work/SKILL.md");
+  const bridge = read(fixture.project, ".grok/skills/commit-work/SKILL.md");
   assert.match(bridge, /disable-model-invocation: true/);
-  assert.match(bridge, /\.\.\/\.\.\/\.\.\/\.agents\/skills\/verify-work\/SKILL\.md/);
+  assert.match(bridge, /\.\.\/\.\.\/\.\.\/\.agents\/skills\/commit-work\/SKILL\.md/);
   assert.doesNotMatch(bridge, /Discover validation commands/);
   assert.match(run(fixture, "doctor").stdout, /Healthy.*1 component/);
 
   const portable = run(fixture, "remove", "--adapter", "grok");
   assert.equal(portable.status, 0, portable.stderr);
-  assert.equal(fs.existsSync(path.join(fixture.project, ".grok", "skills", "verify-work", "SKILL.md")), false);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "verify-work", "SKILL.md")));
+  assert.equal(fs.existsSync(path.join(fixture.project, ".grok", "skills", "commit-work", "SKILL.md")), false);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "commit-work", "SKILL.md")));
 });
 
 test("Claude adapter makes portable commands slash-only without copying their workflow", (context) => {
@@ -1225,30 +1223,30 @@ test("Claude command wrappers replace the folder links of earlier installs", {
   skip: process.platform === "win32",
 }, (context) => {
   const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "command/verify-work", "--adapter", "claude").status, 0);
+  assert.equal(run(fixture, "add", "command/commit-work", "--adapter", "claude").status, 0);
 
   // Recreate the earlier layout, which linked the canonical folder into Claude.
-  const directory = path.join(fixture.project, ".claude", "skills", "verify-work");
+  const directory = path.join(fixture.project, ".claude", "skills", "commit-work");
   fs.rmSync(directory, { recursive: true });
-  fs.symlinkSync("../../.agents/skills/verify-work", directory, "dir");
+  fs.symlinkSync("../../.agents/skills/commit-work", directory, "dir");
   const lockFile = path.join(fixture.project, ".agent-suitup", "lock.json");
   const lock = JSON.parse(fs.readFileSync(lockFile, "utf8"));
-  const entry = lock.components["command/verify-work"];
+  const entry = lock.components["command/commit-work"];
   entry.files = entry.files.filter(({ claudeCommandBridge }) => !claudeCommandBridge);
-  entry.files.push({ path: "./.claude/skills/verify-work", kind: "symlink", target: "../../.agents/skills/verify-work", created: true });
+  entry.files.push({ path: "./.claude/skills/commit-work", kind: "symlink", target: "../../.agents/skills/commit-work", created: true });
   fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
-  const canonical = read(fixture.project, ".agents/skills/verify-work/SKILL.md");
+  const canonical = read(fixture.project, ".agents/skills/commit-work/SKILL.md");
 
   const drift = run(fixture, "doctor");
   assert.equal(drift.status, 1);
-  assert.match(drift.stderr, /DELETE \.\/\.claude\/skills\/verify-work -> \.\.\/\.\.\/\.agents\/skills\/verify-work/);
-  assert.match(drift.stderr, /CREATE \.\/\.claude\/skills\/verify-work\/SKILL\.md/);
+  assert.match(drift.stderr, /DELETE \.\/\.claude\/skills\/commit-work -> \.\.\/\.\.\/\.agents\/skills\/commit-work/);
+  assert.match(drift.stderr, /CREATE \.\/\.claude\/skills\/commit-work\/SKILL\.md/);
 
   const updated = run(fixture, "update");
   assert.equal(updated.status, 0, updated.stderr);
   assert.equal(fs.lstatSync(directory).isDirectory(), true);
-  assert.match(read(fixture.project, ".claude/skills/verify-work/SKILL.md"), /disable-model-invocation: true/);
-  assert.equal(read(fixture.project, ".agents/skills/verify-work/SKILL.md"), canonical);
+  assert.match(read(fixture.project, ".claude/skills/commit-work/SKILL.md"), /disable-model-invocation: true/);
+  assert.equal(read(fixture.project, ".agents/skills/commit-work/SKILL.md"), canonical);
   assert.match(run(fixture, "doctor").stdout, /Healthy.*1 component/);
 });
 
@@ -1256,19 +1254,19 @@ test("Claude command wrappers never write through a user's linked folder", {
   skip: process.platform === "win32",
 }, (context) => {
   const fixture = makeFixture(context);
-  const userSkill = path.join(fixture.root, "my-verify-work");
+  const userSkill = path.join(fixture.root, "my-commit-work");
   fs.mkdirSync(userSkill);
   fs.writeFileSync(path.join(userSkill, "SKILL.md"), "My workflow.\n");
-  const directory = path.join(fixture.project, ".claude", "skills", "verify-work");
+  const directory = path.join(fixture.project, ".claude", "skills", "commit-work");
   fs.mkdirSync(path.dirname(directory), { recursive: true });
   fs.symlinkSync(userSkill, directory, "dir");
 
-  const refused = run(fixture, "add", "command/verify-work", "--adapter", "claude");
+  const refused = run(fixture, "add", "command/commit-work", "--adapter", "claude");
   assert.notEqual(refused.status, 0);
-  assert.match(refused.stderr, /Refusing to remove unmanaged \.\/\.claude\/skills\/verify-work/);
+  assert.match(refused.stderr, /Refusing to remove unmanaged \.\/\.claude\/skills\/commit-work/);
   assert.equal(fs.lstatSync(directory).isSymbolicLink(), true);
 
-  const forced = run(fixture, "add", "command/verify-work", "--adapter", "claude", "--force");
+  const forced = run(fixture, "add", "command/commit-work", "--adapter", "claude", "--force");
   assert.equal(forced.status, 0, forced.stderr);
   assert.equal(fs.lstatSync(directory).isDirectory(), true);
   assert.equal(fs.readFileSync(path.join(userSkill, "SKILL.md"), "utf8"), "My workflow.\n");
@@ -1276,14 +1274,14 @@ test("Claude command wrappers never write through a user's linked folder", {
 
 test("adapter flags on add only add adapters", (context) => {
   const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "command/verify-work", "--adapter", "claude").status, 0);
-  const claudeWrapper = path.join(fixture.project, ".claude", "skills", "verify-work", "SKILL.md");
+  assert.equal(run(fixture, "add", "command/commit-work", "--adapter", "claude").status, 0);
+  const claudeWrapper = path.join(fixture.project, ".claude", "skills", "commit-work", "SKILL.md");
 
   const added = run(fixture, "add", "block/tdd", "--adapter", "grok");
   assert.equal(added.status, 0, added.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "grok"]);
   assert.ok(fs.existsSync(claudeWrapper), "adding an adapter removed another adapter's files");
-  assert.ok(fs.existsSync(path.join(fixture.project, ".grok", "skills", "verify-work", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(fixture.project, ".grok", "skills", "commit-work", "SKILL.md")));
 
   const unchanged = snapshotTree(fixture.root);
   assert.equal(run(fixture, "add", "block/tdd", "--adapter", "none").status, 0);
@@ -1292,7 +1290,7 @@ test("adapter flags on add only add adapters", (context) => {
   const initialized = spawnSync(process.execPath, [cli, "init", "--interactive", "--adapter", "grok"], {
     cwd: fixture.project,
     env: { ...process.env, HOME: fixture.home, USERPROFILE: fixture.home, NO_COLOR: "1" },
-    encoding: "utf8", input: "skill/review-pr\nproject\ny\n", timeout: 5_000,
+    encoding: "utf8", input: "skill/audit-docs\nproject\ny\n", timeout: 5_000,
   });
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "grok"]);
@@ -1300,22 +1298,22 @@ test("adapter flags on add only add adapters", (context) => {
 
 test("remove --adapter drops only that adapter's files", (context) => {
   const fixture = makeFixture(context);
-  const added = run(fixture, "add", "block/tdd", "command/verify-work", "--adapters=claude,grok");
+  const added = run(fixture, "add", "block/tdd", "command/commit-work", "--adapters=claude,grok");
   assert.equal(added.status, 0, added.stderr);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".claude", "skills", "verify-work", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(fixture.project, ".claude", "skills", "commit-work", "SKILL.md")));
 
   const preview = run(fixture, "remove", "--adapter", "claude", "--dry-run");
   assert.equal(preview.status, 0, preview.stderr);
-  assert.match(preview.stdout, /DELETE \.\/\.claude\/skills\/verify-work\/SKILL\.md/);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".claude", "skills", "verify-work", "SKILL.md")));
+  assert.match(preview.stdout, /DELETE \.\/\.claude\/skills\/commit-work\/SKILL\.md/);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".claude", "skills", "commit-work", "SKILL.md")));
 
   const dropped = run(fixture, "remove", "--adapter", "claude");
   assert.equal(dropped.status, 0, dropped.stderr);
   assert.match(dropped.stdout, /Agents removed · 3 file changes/);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["grok"]);
-  assert.equal(fs.existsSync(path.join(fixture.project, ".claude", "skills", "verify-work")), false);
-  assert.ok(fs.existsSync(path.join(fixture.project, ".grok", "skills", "verify-work", "SKILL.md")));
-  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "verify-work", "SKILL.md")));
+  assert.equal(fs.existsSync(path.join(fixture.project, ".claude", "skills", "commit-work")), false);
+  assert.ok(fs.existsSync(path.join(fixture.project, ".grok", "skills", "commit-work", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(fixture.project, ".agents", "skills", "commit-work", "SKILL.md")));
   assert.match(read(fixture.project, ".agents/rules.md"), /<!--as:block\/tdd-->/);
   assert.match(run(fixture, "doctor").stdout, /Healthy/);
 });
@@ -1356,19 +1354,19 @@ test("help lists category keys, agent values, file locations, and command invoca
 
 test("--agent is accepted everywhere --adapter was, including codex", (context) => {
   const fixture = makeFixture(context);
-  const added = run(fixture, "add", "skill/review-pr", "--agent", "codex");
+  const added = run(fixture, "add", "skill/audit-docs", "--agent", "codex");
   assert.equal(added.status, 0, added.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["codex"]);
   assert.equal(fs.existsSync(path.join(fixture.project, ".claude")), false, "Codex reads .agents/skills directly");
   assert.equal(run(fixture, "add", "block/tdd").status, 0);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["codex"],
     "an existing project keeps the agents it chose");
-  assert.equal(run(fixture, "add", "skill/review-pr", "--agents=claude,grok").status, 0);
+  assert.equal(run(fixture, "add", "skill/audit-docs", "--agents=claude,grok").status, 0);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "codex", "grok"]);
   const dropped = run(fixture, "remove", "--agent", "codex");
   assert.equal(dropped.status, 0, dropped.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "grok"]);
-  const invalid = run(fixture, "add", "skill/review-pr", "--agent", "cursor");
+  const invalid = run(fixture, "add", "skill/audit-docs", "--agent", "cursor");
   assert.equal(invalid.status, 1);
   assert.match(invalid.stderr, /Invalid agents: cursor/);
 });
@@ -1386,24 +1384,24 @@ test("doctor agrees in number with the component count", (context) => {
   const fixture = makeFixture(context);
   assert.equal(run(fixture, "add", "block/tdd").status, 0);
   assert.match(run(fixture, "doctor").stdout, /Healthy · 1 component matches the manifest and lockfile\./);
-  assert.equal(run(fixture, "add", "skill/review-pr").status, 0);
+  assert.equal(run(fixture, "add", "skill/audit-docs").status, 0);
   assert.match(run(fixture, "doctor").stdout, /Healthy · 2 components match the manifest and lockfile\./);
 });
 
 test("removal deletes skill directories it emptied and keeps directories with other files", (context) => {
   const fixture = makeFixture(context);
-  const added = run(fixture, "add", "command/verify-work", "skill/audit-code", "--adapter", "grok");
+  const added = run(fixture, "add", "command/commit-work", "skill/audit-docs", "--adapter", "grok");
   assert.equal(added.status, 0, added.stderr);
   const skills = path.join(fixture.project, ".agents", "skills");
-  fs.writeFileSync(path.join(skills, "audit-code", "notes.md"), "My notes.\n");
+  fs.writeFileSync(path.join(skills, "audit-docs", "notes.md"), "My notes.\n");
 
-  const removed = run(fixture, "remove", "command/verify-work", "skill/audit-code");
+  const removed = run(fixture, "remove", "command/commit-work", "skill/audit-docs");
   assert.equal(removed.status, 0, removed.stderr);
-  assert.equal(fs.existsSync(path.join(skills, "verify-work")), false, "an emptied skill directory remains");
-  assert.equal(fs.existsSync(path.join(fixture.project, ".grok", "skills", "verify-work")), false);
+  assert.equal(fs.existsSync(path.join(skills, "commit-work")), false, "an emptied skill directory remains");
+  assert.equal(fs.existsSync(path.join(fixture.project, ".grok", "skills", "commit-work")), false);
   assert.ok(fs.existsSync(path.join(fixture.project, ".grok", "skills")), "the agent's skills folder is kept");
-  assert.deepEqual(fs.readdirSync(skills), ["audit-code"]);
-  assert.deepEqual(fs.readdirSync(path.join(skills, "audit-code")), ["notes.md"]);
+  assert.deepEqual(fs.readdirSync(skills), ["audit-docs"]);
+  assert.deepEqual(fs.readdirSync(path.join(skills, "audit-docs")), ["notes.md"]);
 });
 
 test("adapter-specific components reject an explicitly disabled adapter", (context) => {

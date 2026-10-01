@@ -28,7 +28,7 @@ MCP, and hooks switches are reserved and do not enable `.codex` discovery.
 Portable instructions and normal skills need no adapter:
 
 ```bash
-agent-suitup add block/tdd skill/audit-code
+agent-suitup add block/tdd skill/audit-docs
 grok inspect
 ```
 
@@ -36,7 +36,7 @@ Use the Grok adapter when installing explicit commands so Grok cannot invoke
 them automatically:
 
 ```bash
-agent-suitup add command/verify-work --adapter grok
+agent-suitup add command/commit-work --adapter grok
 ```
 
 ## Verification performed

@@ -4,11 +4,11 @@
   "components": [
     {
       "id": "block/tdd",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "kind": "block",
       "name": "Test-driven development",
       "category": "Development methodology",
-      "description": "A compact Red-Green-Refactor agreement for feature and bug-fix work.",
+      "description": "A compact test-driven development agreement for feature and bug-fix work.",
       "selection": {
         "when": "You want test-first feature and bug-fix work and have a practical test environment.",
         "consider": "Skip for exploratory work if test order is not a standing project policy.",
@@ -54,7 +54,7 @@
       "description": "Require concrete checks and transparent reporting before claiming completion.",
       "selection": {
         "when": "Handoffs leave you unsure which checks actually ran.",
-        "consider": "Adds reporting to every handoff. Choose Verify work for occasional verification instead.",
+        "consider": "Adds reporting to every handoff.",
         "example": "A UI handoff names the tests and browser checks run, plus anything skipped."
       },
       "outcome": "Completion claims identify the checks run, failures encountered, and verification skipped.",
@@ -118,31 +118,6 @@
       "context": { "loading": "always" }
     },
     {
-      "id": "block/ci-production-parity",
-      "version": "1.0.1",
-      "kind": "block",
-      "name": "CI and production parity",
-      "category": "Verification",
-      "description": "Keep CI runtimes and build paths aligned with production behavior.",
-      "selection": {
-        "when": "CI and production runtime or build settings live in separate places.",
-        "consider": "Match relevant behavior; production secrets and live services do not belong in CI.",
-        "example": "A runtime upgrade updates both the production image and CI test runtime."
-      },
-      "outcome": "Runtime and build changes update CI and production paths together and receive equivalent verification.",
-      "alwaysOnJustification": "In repositories with CI and production builds, parity affects dependency, runtime, and deployment changes.",
-      "scopes": ["project"],
-      "content": {
-        "kind": "bundled",
-        "path": "blocks/ci-production-parity.md",
-        "upstream": "jmlero/app-meerkat",
-        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
-      },
-      "license": "Apache-2.0",
-      "context": { "loading": "always" },
-      "suggest": { "when": { "all": ["hasCI"] }, "reason": "continuous integration detected" }
-    },
-    {
       "id": "block/no-unfinished-ui",
       "version": "1.0.0",
       "kind": "block",
@@ -186,25 +161,8 @@
       "context": { "loading": "always" }
     },
     {
-      "id": "skill/audit-code",
-      "version": "1.0.0",
-      "kind": "skill",
-      "name": "Production readiness audit",
-      "category": "Code quality",
-      "description": "Audit security, errors, validation, persistence, infrastructure, tests, and dependencies before release.",
-      "selection": {
-        "when": "You want a broad production readiness review before a release.",
-        "consider": "Produces findings, not automatic fixes. Use Pull request review for one change set.",
-        "example": "Ask: Use audit-code to review this repository before release."
-      },
-      "scopes": ["project", "user"],
-      "content": { "kind": "bundled", "path": "skills/audit-code/SKILL.md" },
-      "license": "Apache-2.0",
-      "context": { "loading": "on-demand" }
-    },
-    {
       "id": "skill/audit-docs",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "skill",
       "name": "Documentation audit",
       "category": "Code quality",
@@ -219,49 +177,6 @@
       "license": "Apache-2.0",
       "context": { "loading": "on-demand" },
       "suggest": { "when": { "all": ["hasDocs"] }, "reason": "documentation detected" }
-    },
-    {
-      "id": "skill/review-pr",
-      "version": "1.0.0",
-      "kind": "skill",
-      "name": "Pull request review",
-      "category": "Code quality",
-      "description": "Review a pull request for correctness, security, tests, compatibility, and project conventions.",
-      "selection": {
-        "when": "You have a pull request or diff ready for a focused review.",
-        "consider": "Needs the actual change set and surrounding code; does not replace a whole-repository audit.",
-        "example": "Ask: Use review-pr to review this diff for regressions and missing tests."
-      },
-      "scopes": ["project", "user"],
-      "content": { "kind": "bundled", "path": "skills/review-pr/SKILL.md" },
-      "license": "Apache-2.0",
-      "context": { "loading": "on-demand" }
-    },
-    {
-      "id": "skill/verify-frontend",
-      "version": "1.0.0",
-      "kind": "skill",
-      "name": "Frontend verification",
-      "category": "Frontend quality",
-      "description": "Inspect changed frontend behavior at representative viewports and interaction states.",
-      "selection": {
-        "when": "You changed a page, interaction, layout, or responsive behavior.",
-        "consider": "Needs a runnable interface and browser access for visual evidence; missing checks must be reported.",
-        "example": "Ask: Use verify-frontend to check this form on mobile and desktop."
-      },
-      "scopes": ["project", "user"],
-      "content": {
-        "kind": "bundled",
-        "path": "skills/verify-frontend/SKILL.md",
-        "upstream": "jmlero/app-meerkat",
-        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
-      },
-      "license": "Apache-2.0",
-      "context": { "loading": "on-demand" },
-      "suggest": {
-        "when": { "any": ["hasReact", "hasNextJs", "hasVue", "hasSvelte"] },
-        "reason": "frontend framework detected"
-      }
     },
     {
       "id": "skill/terraform-skill",
@@ -312,63 +227,6 @@
       "license": "MIT",
       "context": { "loading": "on-demand", "estimatedTokens": 2700 },
       "suggest": { "when": { "all": ["hasFastAPI"] }, "reason": "FastAPI detected" }
-    },
-    {
-      "id": "skill/debug-issue",
-      "version": "1.0.0",
-      "kind": "skill",
-      "name": "Issue debugging",
-      "category": "Diagnosis",
-      "description": "Diagnose a concrete failure with reproduction, competing hypotheses, and evidence; verify a focused fix when requested.",
-      "selection": {
-        "when": "A bug, regression, or unexplained failure needs a supported diagnosis.",
-        "consider": "Keep obvious fixes brief. Diagnosis-only requests preserve the implementation; unavailable evidence must be reported.",
-        "example": "Ask: Use debug-issue to investigate and fix this intermittent test failure."
-      },
-      "scopes": ["project", "user"],
-      "content": { "kind": "bundled", "path": "skills/debug-issue/SKILL.md" },
-      "license": "Apache-2.0",
-      "context": { "loading": "on-demand" }
-    },
-    {
-      "id": "skill/database-migration",
-      "version": "1.0.0",
-      "kind": "skill",
-      "name": "Database migration",
-      "category": "Data lifecycle",
-      "description": "Prepare and validate schema or data migrations, including deployment order, existing data, locks, retries, and recovery.",
-      "selection": {
-        "when": "You are planning, implementing, or reviewing a schema change or data backfill.",
-        "consider": "Requires database and deployment context. Disposable databases can use simpler workflows; preparing a migration does not authorize production execution.",
-        "example": "Ask: Use database-migration to plan a column rename while old and new application versions coexist."
-      },
-      "scopes": ["project", "user"],
-      "content": { "kind": "bundled", "path": "skills/database-migration/SKILL.md" },
-      "license": "Apache-2.0",
-      "context": { "loading": "on-demand" }
-    },
-    {
-      "id": "command/verify-work",
-      "version": "1.1.0",
-      "kind": "command",
-      "name": "Verify work",
-      "category": "Workflow command",
-      "description": "Run the repository's real checks and report concrete evidence without changing the implementation.",
-      "selection": {
-        "when": "You want a deliberate verification pass after implementation.",
-        "consider": "Runs checks and reports evidence without changing the implementation.",
-        "example": "Invoke verify-work after a change to see what passed and what remains unverified."
-      },
-      "scopes": ["project", "user"],
-      "content": {
-        "kind": "bundled",
-        "path": "commands/verify-work/SKILL.md",
-        "root": "commands/verify-work",
-        "upstream": "jmlero/app-meerkat",
-        "revision": "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba"
-      },
-      "license": "Apache-2.0",
-      "context": { "loading": "explicit" }
     },
     {
       "id": "command/commit-work",

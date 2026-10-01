@@ -26,29 +26,22 @@ const appMeerkatBlockIds = [
   "block/completion-evidence",
   "block/transparent-shortcuts",
   "block/secure-defaults",
-  "block/ci-production-parity",
   "block/no-unfinished-ui",
 ];
 
 test("catalog contains the reviewed block-first component set", () => {
   const components = listComponents();
   const ids = components.map(({ id }) => id);
-  assert.equal(components.length, 23);
+  assert.equal(components.length, 16);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of [
     "block/tdd",
     "block/ponytail",
     ...appMeerkatBlockIds,
     "block/focused-changes",
-    "skill/audit-code",
     "skill/audit-docs",
-    "skill/review-pr",
-    "skill/verify-frontend",
     "skill/terraform-skill",
     "skill/fastapi",
-    "skill/debug-issue",
-    "skill/database-migration",
-    "command/verify-work",
     "command/commit-work",
     "plugin/frontend-design",
     "plugin/typescript-lsp",
@@ -207,7 +200,7 @@ test("blocks still require nonempty guidance", (context) => {
   }
 });
 
-test("App Meerkat guidance is routed between compact blocks and on-demand workflows", () => {
+test("App Meerkat guidance stays attributed in compact blocks", () => {
   const components = listComponents();
   for (const id of appMeerkatBlockIds) {
     const component = components.find((candidate) => candidate.id === id);
@@ -215,11 +208,6 @@ test("App Meerkat guidance is routed between compact blocks and on-demand workfl
     assert.equal(component.content.upstream, "jmlero/app-meerkat");
     assert.equal(component.content.revision, "51b77a6a0506661979bef8c6b152d8b3d4fcc3ba");
   }
-  const frontend = components.find(({ id }) => id === "skill/verify-frontend");
-  assert.equal(frontend.context.loading, "on-demand");
-  assert.equal(frontend.content.upstream, "jmlero/app-meerkat");
-  assert.match(bundledContent(frontend), /representative narrow viewport/i);
-  assert.match(bundledContent(components.find(({ id }) => id === "command/verify-work")), /CI failures/);
   assert.match(
     fs.readFileSync(path.join(repository, "THIRD_PARTY_NOTICES.md"), "utf8"),
     /jmlero\/app-meerkat/,
@@ -228,12 +216,11 @@ test("App Meerkat guidance is routed between compact blocks and on-demand workfl
 
 test("blocks agree on verification wording and where deferred work is recorded", () => {
   const text = (id) => bundledContent(listComponents().find((component) => component.id === id));
-  assert.match(text("block/tdd"), /repeat this cycle until\s+the requirements are met/);
-  assert.match(text("block/tdd"), /Refactor the code\s+you touched/);
-  for (const id of ["block/tdd", "block/ponytail", "block/completion-evidence", "block/ci-production-parity"]) {
+  assert.match(text("block/tdd"), /follow TDD/);
+  for (const id of ["block/tdd", "block/ponytail", "block/completion-evidence"]) {
     assert.match(text(id), /relevant\s+checks/, id);
   }
-  for (const id of ["block/completion-evidence", "block/ci-production-parity"]) assert.match(text(id), /skipped/, id);
+  assert.match(text("block/completion-evidence"), /skipped/);
   for (const id of ["block/transparent-shortcuts", "block/secure-defaults"]) {
     assert.match(text(id), /normal task system, or in\s+your handoff when there is none/, id);
   }
@@ -241,7 +228,7 @@ test("blocks agree on verification wording and where deferred work is recorded",
 });
 
 test("workflow commands are complete, explicitly invoked Agent Skill packages", () => {
-  for (const id of ["command/verify-work", "command/commit-work"]) {
+  for (const id of ["command/commit-work"]) {
     const component = listComponents().find((candidate) => candidate.id === id);
     assert.equal(component.context.loading, "explicit");
     const files = bundledPackage(component);
@@ -268,7 +255,7 @@ test("portable components are vendor-neutral and integrations are Claude-only", 
   const grok = components.filter((component) => availableWithAdapters(component, ["grok"]));
 
   assert.ok(portable.some(({ id }) => id === "block/tdd"));
-  assert.ok(portable.some(({ id }) => id === "skill/audit-code"));
+  assert.ok(portable.some(({ id }) => id === "skill/audit-docs"));
   assert.ok(portable.every(({ kind }) => kind !== "plugin"));
   assert.ok(portable.every((component) => component.adapters === undefined));
   assert.equal(claude.length, components.length);
@@ -283,7 +270,7 @@ test("suggestions support prerequisite-aware AND and stack-aware OR rules", () =
     hasTypeScript: true,
     hasTypeScriptLanguageServer: true,
   }).pick, true);
-  const frontend = listComponents().find(({ id }) => id === "skill/verify-frontend");
+  const frontend = listComponents().find(({ id }) => id === "plugin/frontend-design");
   assert.equal(suggested(frontend, { hasSvelte: true }).pick, true);
   assert.equal(suggested(frontend, {}).pick, false);
 });

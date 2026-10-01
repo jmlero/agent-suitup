@@ -1,6 +1,0 @@
-interface:
-  display_name: "Verify work"
-  short_description: "Run the right checks and report evidence"
-  default_prompt: "Use $verify-work to run the relevant checks for my current changes and report evidence."
-policy:
-  allow_implicit_invocation: false

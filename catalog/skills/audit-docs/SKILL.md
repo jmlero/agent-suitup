@@ -1,12 +1,11 @@
 ---
 name: audit-docs
-description: Audit repository documentation for accuracy, staleness, duplication, broken references, and unnecessary context cost. Use for documentation health checks; do not edit files unless explicitly asked.
+description: Audit repository documentation for accuracy, staleness, duplication, broken references, and unnecessary context cost. Use for documentation health checks.
 ---
 
 # Documentation audit
 
-Read the repository instructions, inventory tracked documentation, and compare
-claims with the current code and configuration. Exclude dependency, generated,
+Read the repository instructions, inventory tracked documentation, and compare with the current code and configuration. Exclude dependency, generated,
 cache, and vendored directories unless the repository treats them as source.
 
 ## Checks

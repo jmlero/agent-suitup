@@ -96,7 +96,7 @@ test("apply refuses content created during remote planning even with force", asy
   fs.mkdirSync(home);
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  const skillRoot = path.join(home, ".agents", "skills", "audit-code");
+  const skillRoot = path.join(home, ".agents", "skills", "audit-docs");
   const skill = path.join(skillRoot, "SKILL.md");
   const originalFetch = globalThis.fetch;
   context.after(() => { globalThis.fetch = originalFetch; });
@@ -112,7 +112,7 @@ test("apply refuses content created during remote planning even with force", asy
     manifestVersion: 2,
     adapters: [],
     components: [
-      { id: "skill/audit-code", scope: "user" },
+      { id: "skill/audit-docs", scope: "user" },
       { id: "skill/fastapi", scope: "project" },
     ],
   };
@@ -121,10 +121,10 @@ test("apply refuses content created during remote planning even with force", asy
   result.planner.write(state.manifest, jsonDocument(manifest), { allowExisting: true });
   result.planner.write(state.lock, jsonDocument(result.lock), { allowExisting: true });
 
-  assert.throws(() => result.planner.apply(), /changed after planning.*audit-code/);
+  assert.throws(() => result.planner.apply(), /changed after planning.*audit-docs/);
   assert.equal(fs.readFileSync(skill, "utf8"), "User-created guidance during download.\n");
   assert.deepEqual(fs.readdirSync(cwd), []);
-  assert.deepEqual(fs.readdirSync(path.dirname(skillRoot)), ["audit-code"]);
+  assert.deepEqual(fs.readdirSync(path.dirname(skillRoot)), ["audit-docs"]);
   assert.deepEqual(fs.readdirSync(skillRoot), ["SKILL.md"]);
 });
 
