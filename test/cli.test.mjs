@@ -78,7 +78,7 @@ test("non-interactive assessment cannot enable or disable existing adapters", (c
   for (const adapter of ["none", "claude"]) {
     const fixture = makeFixture(context);
     const components = ["block/tdd", "command/commit-work"];
-    if (adapter === "claude") components.push("plugin/github");
+    if (adapter === "claude") components.push("plugin/frontend-design");
     const added = run(fixture, "add", ...components, "--adapter", adapter);
     assert.equal(added.status, 0, added.stderr);
     const before = snapshotTree(fixture.root);
@@ -128,7 +128,7 @@ test("interactive init asks for agents first and installs a block through the ru
   assert.doesNotMatch(initialized.stdout, /Install them for/);
   assert.match(initialized.stdout, /1 Agents[\s\S]*2 Choose[\s\S]*3 Review/);
   assert.match(initialized.stdout, /Skills \(5\)[\s\S]*Skill commands \(1\)/);
-  assert.doesNotMatch(initialized.stdout, /Integrations \(5\)/, "Claude Code plugins need Claude Code");
+  assert.doesNotMatch(initialized.stdout, /Integrations \(4\)/, "Claude Code plugins need Claude Code");
   assert.match(initialized.stdout, /AGENTS\.md  adds a one-line link to \.agents\/rules\.md/);
   assert.match(initialized.stdout, /agent-suitup ready[\s\S]*More\s+agent-suitup add --interactive/);
 
@@ -166,7 +166,7 @@ test("interactive init can browse the whole catalog and skip installation", asyn
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Agents: Claude Code, Grok Build/);
-  assert.match(initialized.stdout, /Integrations \(5\)/);
+  assert.match(initialized.stdout, /Integrations \(4\)/);
   assert.match(initialized.stdout, /Repository left unchanged/);
   assert.deepEqual(fs.readdirSync(fixture.project), []);
 });
@@ -189,7 +189,7 @@ test("interactive init leaves an existing installation unchanged when all select
 
 test("interactive init preserves local edits when a forced plan is declined", async (context) => {
   const fixture = makeFixture(context);
-  const added = run(fixture, "add", "block/tdd", "plugin/github");
+  const added = run(fixture, "add", "block/tdd", "plugin/frontend-design");
   assert.equal(added.status, 0, added.stderr);
   fs.writeFileSync(path.join(fixture.project, ".agents/rules.md"), read(fixture.project, ".agents/rules.md")
     .replace("For features and bug fixes,", "For parser bug fixes only,"));
@@ -264,7 +264,7 @@ test("interactive init installs a plugin directly from the unified catalog", asy
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Integrations \(5\)/);
+  assert.match(initialized.stdout, /Integrations \(4\)/);
   assert.match(initialized.stdout, /16 · plugin\/frontend-design/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
@@ -401,12 +401,12 @@ test("mixed selections preserve required adapters and never infer blocks from sk
   const result = spawnSync(process.execPath, [cli, "init", "--interactive"], {
     cwd: fixture.project,
     env: { ...process.env, HOME: fixture.home, USERPROFILE: fixture.home, NO_COLOR: "1" },
-    encoding: "utf8", input: "claude\nskill/audit-docs command/commit-work plugin/github\nproject\ny\n", timeout: 5_000,
+    encoding: "utf8", input: "claude\nskill/audit-docs command/commit-work plugin/frontend-design\nproject\ny\n", timeout: 5_000,
   });
   assert.equal(result.status, 0, result.stderr);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, ["claude"]);
-  assert.deepEqual(manifest.components.map(({ id }) => id), ["command/commit-work", "plugin/github", "skill/audit-docs"]);
+  assert.deepEqual(manifest.components.map(({ id }) => id), ["command/commit-work", "plugin/frontend-design", "skill/audit-docs"]);
   assert.equal(fs.existsSync(path.join(fixture.project, "AGENTS.md")), false);
   assert.match(run(fixture, "doctor").stdout, /Healthy.*3 components/);
 });
@@ -497,7 +497,7 @@ test("pressing Enter at the agent question sets up every agent", async (context)
   ], "init", "--interactive");
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Agents: Claude Code, Codex, Grok Build/);
-  assert.match(result.stdout, /Integrations \(5\)/);
+  assert.match(result.stdout, /Integrations \(4\)/);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "codex", "grok"]);
   for (const agent of ["claude", "grok"]) {
     assert.match(read(fixture.project, `.${agent}/skills/commit-work/SKILL.md`), /disable-model-invocation: true/);
@@ -834,7 +834,7 @@ test("sectioned catalog exposes commands as complete portable skills", (context)
     "Blocks \\(9\\)",
     "Skills \\(5\\)",
     "Skill commands \\(1\\)",
-    "Integrations \\(5\\)",
+    "Integrations \\(4\\)",
   ]) assert.match(listed.stdout, new RegExp(section));
   assert.doesNotMatch(listed.stdout, /External tools|Hooks & automation/);
   const blocks = run(fixture, "list", "blocks");
@@ -1057,35 +1057,39 @@ test("Claude marketplace edits preserve unrelated settings", (context) => {
   fs.writeFileSync(path.join(fixture.project, ".claude", "settings.json"), '{"permissions":{"allow":["Read"]}}\n');
   fs.writeFileSync(path.join(fixture.home, ".claude", "settings.json"), '{"theme":"dark"}\n');
 
-  const installed = run(fixture, "add", "plugin/github");
+  const installed = run(fixture, "add", "plugin/frontend-design");
   assert.equal(installed.status, 0, installed.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".agent-suitup/manifest.json")).adapters, ["claude", "codex", "grok"]);
   const projectSettings = JSON.parse(read(fixture.project, ".claude/settings.json"));
   assert.deepEqual(projectSettings.permissions, { allow: ["Read"] });
-  assert.equal(projectSettings.enabledPlugins["github@claude-plugins-official"], true);
+  assert.equal(projectSettings.enabledPlugins["frontend-design@claude-plugins-official"], true);
   assert.equal(projectSettings.extraKnownMarketplaces["claude-plugins-official"].source.repo, "anthropics/claude-plugins-official");
   assert.equal(read(fixture.home, ".claude/settings.json"), '{"theme":"dark"}\n', "a project plugin changed user settings");
 
-  const removed = run(fixture, "remove", "plugin/github");
+  const removed = run(fixture, "remove", "plugin/frontend-design");
   assert.equal(removed.status, 0, removed.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".claude/settings.json")), { permissions: { allow: ["Read"] } });
   assert.equal(read(fixture.home, ".claude/settings.json"), '{"theme":"dark"}\n');
 });
 
-test("a marketplace agent-suitup registered stays until its last plugin is removed", (context) => {
+test("a marketplace agent-suitup registered stays until its last plugin is removed", { skip: process.platform === "win32" }, (context) => {
   const fixture = makeFixture(context);
-  const installed = run(fixture, "add", "plugin/github", "plugin/frontend-design");
+  const executables = path.join(fixture.root, "bin");
+  fs.mkdirSync(executables);
+  fs.writeFileSync(path.join(executables, "typescript-language-server"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  const runWithServer = (...arguments_) => runWithEnv(fixture, { PATH: executables }, ...arguments_);
+  const installed = runWithServer("add", "plugin/typescript-lsp", "plugin/frontend-design", "--scope", "project");
   assert.equal(installed.status, 0, installed.stderr);
   const settings = () => JSON.parse(read(fixture.project, ".claude/settings.json"));
   const lock = JSON.parse(read(fixture.project, ".agent-suitup/lock.json"));
-  assert.equal(lock.components["plugin/github"].marketplaceCreated, true);
+  assert.equal(lock.components["plugin/typescript-lsp"].marketplaceCreated, true);
   assert.equal(lock.components["plugin/frontend-design"].marketplaceCreated, true);
 
-  assert.equal(run(fixture, "remove", "plugin/github").status, 0);
+  assert.equal(runWithServer("remove", "plugin/typescript-lsp").status, 0);
   assert.ok(settings().extraKnownMarketplaces["claude-plugins-official"], "a marketplace still in use was removed");
-  assert.match(run(fixture, "doctor").stdout, /Healthy/);
+  assert.match(runWithServer("doctor").stdout, /Healthy/);
 
-  assert.equal(run(fixture, "remove", "plugin/frontend-design").status, 0);
+  assert.equal(runWithServer("remove", "plugin/frontend-design").status, 0);
   assert.deepEqual(settings(), {});
   assert.equal(fs.existsSync(path.join(fixture.home, ".claude")), false);
 });
@@ -1097,20 +1101,20 @@ test("a marketplace the user registered is kept when plugins are removed or chan
   fs.writeFileSync(path.join(fixture.project, ".claude", "settings.json"),
     `${JSON.stringify({ extraKnownMarketplaces: { "claude-plugins-official": marketplace } })}\n`);
 
-  const installed = run(fixture, "add", "plugin/github");
+  const installed = run(fixture, "add", "plugin/frontend-design");
   assert.equal(installed.status, 0, installed.stderr);
   assert.equal(Object.hasOwn(JSON.parse(read(fixture.project, ".agent-suitup/lock.json"))
-    .components["plugin/github"], "marketplaceCreated"), false);
+    .components["plugin/frontend-design"], "marketplaceCreated"), false);
 
-  const moved = run(fixture, "add", "plugin/github", "--scope", "user");
+  const moved = run(fixture, "add", "plugin/frontend-design", "--scope", "user");
   assert.equal(moved.status, 0, moved.stderr);
   assert.deepEqual(JSON.parse(read(fixture.project, ".claude/settings.json")),
     { extraKnownMarketplaces: { "claude-plugins-official": marketplace } });
   const user = JSON.parse(read(fixture.home, ".claude/settings.json"));
   assert.deepEqual(user.extraKnownMarketplaces["claude-plugins-official"], marketplace);
-  assert.equal(user.enabledPlugins["github@claude-plugins-official"], true);
+  assert.equal(user.enabledPlugins["frontend-design@claude-plugins-official"], true);
 
-  assert.equal(run(fixture, "remove", "plugin/github").status, 0);
+  assert.equal(run(fixture, "remove", "plugin/frontend-design").status, 0);
   assert.deepEqual(JSON.parse(read(fixture.home, ".claude/settings.json")), {});
   assert.deepEqual(JSON.parse(read(fixture.project, ".claude/settings.json")),
     { extraKnownMarketplaces: { "claude-plugins-official": marketplace } });
@@ -1320,13 +1324,13 @@ test("remove --adapter drops only that adapter's files", (context) => {
 
 test("remove --adapter refuses adapters that are disabled or still required", (context) => {
   const fixture = makeFixture(context);
-  assert.equal(run(fixture, "add", "plugin/github", "block/tdd", "--agent", "claude").status, 0);
+  assert.equal(run(fixture, "add", "plugin/frontend-design", "block/tdd", "--agent", "claude").status, 0);
   const before = snapshotTree(fixture.root);
 
   for (const [adapter, message] of [
     ["grok", /Agent not set up: grok/],
     ["none", /remove --agent needs claude, codex, grok/],
-    ["claude", /plugin\/github still requires Claude Code; remove it first or in the same command/],
+    ["claude", /plugin\/frontend-design still requires Claude Code; remove it first or in the same command/],
   ]) {
     const refused = run(fixture, "remove", "--adapter", adapter);
     assert.equal(refused.status, 1, refused.stdout);
@@ -1334,7 +1338,7 @@ test("remove --adapter refuses adapters that are disabled or still required", (c
     assert.deepEqual(snapshotTree(fixture.root), before);
   }
 
-  const together = run(fixture, "remove", "plugin/github", "--adapter", "claude");
+  const together = run(fixture, "remove", "plugin/frontend-design", "--adapter", "claude");
   assert.equal(together.status, 0, together.stderr);
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, []);
@@ -1406,9 +1410,9 @@ test("removal deletes skill directories it emptied and keeps directories with ot
 
 test("adapter-specific components reject an explicitly disabled adapter", (context) => {
   const fixture = makeFixture(context);
-  const result = run(fixture, "add", "plugin/github", "--adapter", "none");
+  const result = run(fixture, "add", "plugin/frontend-design", "--adapter", "none");
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /plugin\/github requires Claude Code \(--agent claude\)/);
+  assert.match(result.stderr, /plugin\/frontend-design requires Claude Code \(--agent claude\)/);
   assert.equal(fs.existsSync(path.join(fixture.project, ".agent-suitup")), false);
 });
 

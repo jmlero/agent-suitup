@@ -172,7 +172,6 @@ enables when needed:
 | Plugin | Adds to Claude | Needs separately |
 |---|---|---|
 | `plugin/frontend-design` | Frontend design guidance | — |
-| `plugin/github` | GitHub issues, pull requests, and actions | GitHub authentication |
 | `plugin/typescript-lsp` | TypeScript language server | `typescript-language-server` on `PATH` |
 | `plugin/pyright-lsp` | Python type checking | `pyright-langserver` on `PATH` |
 | `plugin/codex` | Delegation and review through the Codex CLI | `codex` on `PATH` |
@@ -189,7 +188,7 @@ continue. Authentication and runtime setup remain separate from installation.
 
 ```bash
 agent-suitup add command/commit-work --agent grok
-agent-suitup add plugin/github
+agent-suitup add plugin/frontend-design
 ```
 
 ### Choose and remove agents
@@ -213,7 +212,7 @@ agent-suitup remove --agent grok
 ```
 
 Claude Code plugins require Claude Code. Remove them first, or in the same
-command: `agent-suitup remove plugin/github --agent claude`.
+command: `agent-suitup remove plugin/frontend-design --agent claude`.
 
 ## Manage an installation
 

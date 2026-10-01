@@ -171,7 +171,7 @@ agent-suitup inspect skill/audit-docs    # purpose, example, and installation
 agent-suitup add block/completion-evidence
 agent-suitup add skill/audit-docs
 agent-suitup add command/commit-work
-agent-suitup add plugin/github          # optional Claude edge
+agent-suitup add plugin/frontend-design # optional Claude edge
 agent-suitup plan                       # preview exact changes
 agent-suitup remove <component>         # remove only owned state
 agent-suitup remove --agent grok        # drop an agent's files

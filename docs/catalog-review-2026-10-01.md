@@ -21,6 +21,13 @@ requires a new review.
 | `skill/database-migration` | **Remove.** The 2026-09-07 addition is withdrawn. |
 | `command/verify-work` | **Remove.** |
 | `skill/audit-docs` | **Shorten**, version `1.1.0`. The description no longer forbids edits unless explicitly asked. |
+| `plugin/github` | **Remove**, on the maintainer's request. GitHub detection still appears in the stack summary. |
+
+The remaining plugins were rechecked against their marketplaces on 2026-10-01.
+`frontend-design`, `typescript-lsp`, and `pyright-lsp` still resolve in
+`anthropics/claude-plugins-official` with the same IDs and language-server
+commands; `codex` is still `1.0.6` in `openai/codex-plugin-cc`. Only
+`lastVerified` changes.
 
 ## Command revision
 

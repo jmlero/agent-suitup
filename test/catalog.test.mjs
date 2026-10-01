@@ -32,7 +32,7 @@ const appMeerkatBlockIds = [
 test("catalog contains the reviewed block-first component set", () => {
   const components = listComponents();
   const ids = components.map(({ id }) => id);
-  assert.equal(components.length, 20);
+  assert.equal(components.length, 19);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of [
     "block/tdd",
@@ -50,7 +50,6 @@ test("catalog contains the reviewed block-first component set", () => {
     "plugin/frontend-design",
     "plugin/typescript-lsp",
     "plugin/pyright-lsp",
-    "plugin/github",
     "plugin/codex",
   ]) assert.ok(ids.includes(id), id);
 
@@ -272,7 +271,7 @@ test("portable components are vendor-neutral and integrations are Claude-only", 
   assert.ok(portable.every((component) => component.adapters === undefined));
   assert.equal(claude.length, components.length);
   assert.equal(grok.length, portable.length);
-  assert.equal(availableWithAdapters(components.find(({ id }) => id === "plugin/github"), []), false);
+  assert.equal(availableWithAdapters(components.find(({ id }) => id === "plugin/frontend-design"), []), false);
 });
 
 test("suggestions support prerequisite-aware AND and stack-aware OR rules", () => {
@@ -288,7 +287,7 @@ test("suggestions support prerequisite-aware AND and stack-aware OR rules", () =
 });
 
 test("critical integration and block metadata is runtime-validated", () => {
-  const plugin = listComponents().find(({ id }) => id === "plugin/github");
+  const plugin = listComponents().find(({ id }) => id === "plugin/frontend-design");
   assert.throws(
     () => validateCatalogComponent({ ...plugin, lastVerified: undefined }, new Set()),
     /lastVerified/,
@@ -316,15 +315,11 @@ test("current marketplace mappings are explicit, verified, and non-overlapping",
     pluginId: "frontend-design",
     marketplace: { name: "claude-plugins-official", repo: "anthropics/claude-plugins-official" },
   });
-  assert.deepEqual(plugins["plugin/github"].adapter.claude, {
-    pluginId: "github",
-    marketplace: { name: "claude-plugins-official", repo: "anthropics/claude-plugins-official" },
-  });
   assert.deepEqual(plugins["plugin/codex"].adapter.claude, {
     pluginId: "codex",
     marketplace: { name: "openai-codex", repo: "openai/codex-plugin-cc" },
   });
-  assert.ok(Object.values(plugins).every(({ lastVerified }) => lastVerified === "2026-08-15"));
+  assert.ok(Object.values(plugins).every(({ lastVerified }) => lastVerified === "2026-10-01"));
 });
 
 test("remote skill directories are pinned, normalized, checksummed, and complete", async (context) => {

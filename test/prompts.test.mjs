@@ -361,7 +361,7 @@ test("category tabs wrap before they would be truncated", () => {
     const tabRows = frame.slice(1, frame.findIndex((line) => line.startsWith("─")));
     assert.ok(tabRows.length, `${columns}: no tab row`);
     assert.ok(tabRows.every((line) => !line.includes("…") && displayWidth(line) <= columns - 2), `${columns}: ${tabRows}`);
-    assert.match(tabRows.join(" "), /All 20.*Blocks 9.*Skills 5.*Skill commands 1.*Integrations 5/);
+    assert.match(tabRows.join(" "), /All 19.*Blocks 9.*Skills 5.*Skill commands 1.*Integrations 4/);
   }
 });
 
@@ -455,7 +455,7 @@ test("u switches new items between this project and all projects, and the detail
 
 test("b leaves the picker to go back only when there is a previous step, keeping the selection", async () => {
   const offered = components.filter(({ kind }) => kind !== "plugin");
-  const picker = new Picker(offered, { selected: ["block/tdd", "plugin/github"], back: true });
+  const picker = new Picker(offered, { selected: ["block/tdd", "plugin/frontend-design"], back: true });
   assert.deepEqual(picker.selection.map(({ id }) => id), ["block/tdd"], "items no longer offered are dropped");
   assert.match(pickerFrame(picker, { columns: 120, rows: 30 }).map(stripVTControlCharacters).join("\n"), /b back/);
   picker.handle("/");

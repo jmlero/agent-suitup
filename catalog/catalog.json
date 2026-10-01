@@ -350,7 +350,7 @@
       "adapters": ["claude"],
       "scopes": ["project", "user"],
       "adapter": { "claude": { "pluginId": "frontend-design", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
-      "lastVerified": "2026-08-15",
+      "lastVerified": "2026-10-01",
       "suggest": {
         "when": { "any": ["hasReact", "hasNextJs", "hasVue", "hasSvelte"] },
         "reason": "frontend framework detected"
@@ -373,7 +373,7 @@
       "recommendedScope": "user",
       "requires": { "commands": ["typescript-language-server"] },
       "adapter": { "claude": { "pluginId": "typescript-lsp", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
-      "lastVerified": "2026-08-15",
+      "lastVerified": "2026-10-01",
       "suggest": {
         "when": { "all": ["hasTypeScript", "hasTypeScriptLanguageServer"] },
         "reason": "TypeScript and its language server detected"
@@ -396,29 +396,11 @@
       "recommendedScope": "user",
       "requires": { "commands": ["pyright-langserver"] },
       "adapter": { "claude": { "pluginId": "pyright-lsp", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
-      "lastVerified": "2026-08-15",
+      "lastVerified": "2026-10-01",
       "suggest": {
         "when": { "all": ["hasPython", "hasPyrightLanguageServer"] },
         "reason": "Python and Pyright detected"
       }
-    },
-    {
-      "id": "plugin/github",
-      "version": "1.0.0",
-      "kind": "plugin",
-      "name": "GitHub",
-      "category": "Anthropic",
-      "description": "Official Claude integration for GitHub issues, pull requests, and actions; authentication is configured separately.",
-      "selection": {
-        "when": "You use Claude to work with GitHub issues, pull requests, and actions.",
-        "consider": "GitHub authentication is configured separately; enabling settings does not authenticate you.",
-        "example": "Connect GitHub in Claude, then ask it to inspect a pull request."
-      },
-      "adapters": ["claude"],
-      "scopes": ["project", "user"],
-      "adapter": { "claude": { "pluginId": "github", "marketplace": { "name": "claude-plugins-official", "repo": "anthropics/claude-plugins-official" } } },
-      "lastVerified": "2026-08-15",
-      "suggest": { "when": { "all": ["isGitHubRepo"] }, "reason": "GitHub remote detected" }
     },
     {
       "id": "plugin/codex",
@@ -436,7 +418,7 @@
       "scopes": ["project", "user"],
       "requires": { "commands": ["codex"] },
       "adapter": { "claude": { "pluginId": "codex", "marketplace": { "name": "openai-codex", "repo": "openai/codex-plugin-cc" } } },
-      "lastVerified": "2026-08-15"
+      "lastVerified": "2026-10-01"
     }
   ]
 }
