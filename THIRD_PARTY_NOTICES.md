@@ -47,6 +47,14 @@ observations. It declares MIT in its skill frontmatter; its skill text is not
 vendored here. The agent-suitup block expresses the selected policy independently,
 including an explicit exception for necessary supporting refactors.
 
+## Autonomy, durable task list, and completion evidence: source of the guidance
+
+`catalog/blocks/autonomy.md`, `catalog/blocks/task-list.md`, and the handoff
+sentences in `catalog/blocks/completion-evidence.md` are original agent-suitup
+wording under Apache-2.0. They apply guidance from Anthropic's
+[Getting the most out of Opus 5.5](https://claude.dev/blog/getting-the-most-out-of-opus-5-5/);
+no text from the article is vendored here.
+
 ## Remote skills
 
 `skill/terraform-skill` installs pinned content from

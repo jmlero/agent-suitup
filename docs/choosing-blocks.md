@@ -56,7 +56,9 @@ multiple providers are part of the accepted scope.
   which parts of the result remain unverified.
 - **Skip when:** Your repository or agent already requires and consistently
   produces that evidence, or verification is only an occasional request.
-- **Tradeoff:** Every handoff carries reporting overhead. Repository-required
+- **Tradeoff:** Every handoff carries reporting overhead. Handoffs lead with
+  anything waiting on the user, and research or analysis names what could not
+  be found or checked. Repository-required
   checks still need a clear owner; this block does not define a project's test
   suite or guarantee that the checks chosen are sufficient.
 
@@ -138,7 +140,42 @@ edits. They overlap in preferring small changes, so adopt both only when both
 policies are useful. See the [review record](evaluations/records/2026-09-07-focused-changes.md)
 for provenance and the limits of the evaluation.
 
+## `block/autonomy` — Autonomy
+
+[Read the instruction](../catalog/blocks/autonomy.md).
+
+- **Consider when:** You hand agents whole tasks with a clear finish line and
+  want them to keep going instead of checking in after each step.
+- **Skip when:** You pair-program with the agent and want a summary before and
+  after each action, or your agent's permission settings already define when it
+  stops.
+- **Tradeoff:** Fewer interruptions mean less chance to redirect mid-task. The
+  block still stops before destructive or outward-facing actions; it does not
+  replace your agent's permission prompts.
+
+Example decision: adopt for a team that assigns migrations ending in "the tests
+pass"; skip for a developer who reviews each step as it happens.
+
+## `block/task-list` — Durable task list
+
+[Read the instruction](../catalog/blocks/task-list.md).
+
+- **Consider when:** Agents run long multi-step tasks that can outlast their
+  context window, and you want a resumable checklist in the repository.
+- **Skip when:** Tasks are short, or your agent's built-in task tracking is
+  enough.
+- **Tradeoff:** `TASKS.md` appears at the repository root during work and can
+  end up in commits unless you ignore it or the agent removes its section when
+  done. Other entries in an existing `TASKS.md` are left alone.
+
+Example decision: adopt for a project where agents migrate dozens of endpoints
+across sessions; skip for one where most tasks finish in a single session.
+
 ## Combining and previewing selections
+
+Autonomy and completion evidence work together: the agent runs without
+check-ins, then leads its handoff with anything waiting on you. Durable task
+list helps autonomy survive long runs.
 
 Verification appears in minimal implementation and completion evidence, and
 both refer to the same relevant checks: minimal implementation starts with the

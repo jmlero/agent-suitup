@@ -32,13 +32,15 @@ const appMeerkatBlockIds = [
 test("catalog contains the reviewed block-first component set", () => {
   const components = listComponents();
   const ids = components.map(({ id }) => id);
-  assert.equal(components.length, 16);
+  assert.equal(components.length, 18);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of [
     "block/tdd",
     "block/ponytail",
     ...appMeerkatBlockIds,
     "block/focused-changes",
+    "block/autonomy",
+    "block/task-list",
     "skill/audit-docs",
     "skill/terraform-skill",
     "skill/fastapi",
@@ -69,7 +71,7 @@ test("catalog contains the reviewed block-first component set", () => {
 });
 
 test("every catalog component has a recorded form and deletion-pressure decision", () => {
-  const review = ["catalog-review-2026-08-15.md", "catalog-review-2026-09-07.md"]
+  const review = ["catalog-review-2026-08-15.md", "catalog-review-2026-09-07.md", "catalog-review-2026-10-01.md"]
     .map((file) => fs.readFileSync(path.join(repository, "docs", file), "utf8"))
     .join("\n");
   for (const { id } of listComponents()) assert.ok(review.includes("`" + id + "`"), id);
@@ -224,6 +226,9 @@ test("blocks agree on verification wording and where deferred work is recorded",
     assert.match(text(id), /relevant\s+checks/, id);
   }
   assert.match(text("block/completion-evidence"), /skipped/);
+  assert.match(text("block/completion-evidence"), /Lead the handoff\s+with anything waiting on the user/);
+  assert.match(text("block/autonomy"), /Stop and ask only when you cannot continue without the user/);
+  assert.match(text("block/task-list"), /`TASKS\.md` at the repository root/);
   for (const id of ["block/transparent-shortcuts", "block/secure-defaults"]) {
     assert.match(text(id), /normal task system, or in\s+your handoff when there is none/, id);
   }

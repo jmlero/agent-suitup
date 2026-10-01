@@ -104,6 +104,8 @@ tradeoffs, and links to the exact instructions.
 | `block/secure-defaults` | Protect new external boundaries by default |
 | `block/no-unfinished-ui` | Omit unavailable product paths |
 | `block/focused-changes` | Keep edits scoped, preserve unrelated work, and allow necessary supporting refactors |
+| `block/autonomy` | Keep going without check-ins; ask only when blocked or before destructive actions |
+| `block/task-list` | Track long multi-step work in a root `TASKS.md` that survives context resets |
 
 ### Install and use skills
 

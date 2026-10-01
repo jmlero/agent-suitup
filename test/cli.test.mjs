@@ -122,7 +122,7 @@ test("interactive init asks for agents first and installs a block through the ru
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Which coding agents do you use\?\n.*\n  all  All agents\s+recommended · every item works in every agent\n  1    Claude Code[\s\S]*2    Codex[\s\S]*3    Grok Build/);
   assert.match(initialized.stdout, /Agents: Codex/);
-  assert.match(initialized.stdout, /Blocks \(7\)/);
+  assert.match(initialized.stdout, /Blocks \(9\)/);
   assert.match(initialized.stdout, /Always-on rules in \.agents\/rules\.md, linked from AGENTS\.md/);
   assert.match(initialized.stdout, /01 · block\/tdd[\s\S]*72 words/);
   assert.doesNotMatch(initialized.stdout, /Install them for/);
@@ -145,14 +145,14 @@ test("interactive init confirms the aggregate cost before installing every block
   const fixture = makeFixture(context);
   const initialized = await runInteractive(fixture, [
     [/Your agents/, "2"],
-    [/Select numbers or ranges/, "1-7"],
+    [/Select numbers or ranges/, "1-9"],
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Always on\s+438 words · ~739 tokens per session/);
+  assert.match(initialized.stdout, /Always on\s+591 words · ~963 tokens per session/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
-  assert.equal(manifest.components.length, 7);
+  assert.equal(manifest.components.length, 9);
   assert.ok(manifest.components.every(({ id }) => id.startsWith("block/")));
   assert.deepEqual(manifest.adapters, ["codex"]);
   assert.equal(count(read(fixture.project, "AGENTS.md"), "@.agents/rules.md"), 1, "all blocks share one link");
@@ -197,7 +197,7 @@ test("interactive init preserves local edits when a forced plan is declined", as
 
   const initialized = await runInteractive(fixture, [
     [/Your agents/, ""],
-    [/Select numbers or ranges/, "1-7"],
+    [/Select numbers or ranges/, "1-9"],
     [/Install this selection/, "n"],
   ], "init", "--interactive", "--force");
   assert.equal(initialized.status, 0, initialized.stderr);
@@ -231,7 +231,7 @@ test("interactive init leaves fully selected block installations unchanged", asy
 
   const initialized = await runInteractive(fixture, [
     [/Your agents/, "codex"],
-    [/Select numbers or ranges/, "1-7"],
+    [/Select numbers or ranges/, "1-9"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /block\/tdd[^\n]*installed/);
@@ -265,7 +265,7 @@ test("interactive init installs a plugin directly from the unified catalog", asy
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
   assert.match(initialized.stdout, /Integrations \(5\)/);
-  assert.match(initialized.stdout, /12 · plugin\/frontend-design/);
+  assert.match(initialized.stdout, /14 · plugin\/frontend-design/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.deepEqual(manifest.adapters, ["claude"]);
@@ -314,7 +314,7 @@ test("inspect and in-menu guides are read-only, including remote skills", async 
   assert.match(everyAgent.stdout, /\.agents\/skills\/fastapi\/\s+Codex and Grok Build read it here\n\s+\.claude\/skills\/fastapi\s+Claude Code/);
   const menu = await runInteractive(fixture, [
     [/Your agents/, "codex"],
-    [/Select numbers or ranges/, "i 8"],
+    [/Select numbers or ranges/, "i 10"],
     [/Select numbers or ranges/, "i skill/fastapi"],
     [/Select numbers or ranges/, "none"],
   ], "init", "--interactive");
@@ -831,7 +831,7 @@ test("sectioned catalog exposes commands as complete portable skills", (context)
   const listed = run(fixture, "list");
   assert.equal(listed.status, 0, listed.stderr);
   for (const section of [
-    "Blocks \\(7\\)",
+    "Blocks \\(9\\)",
     "Skills \\(3\\)",
     "Skill commands \\(1\\)",
     "Integrations \\(5\\)",

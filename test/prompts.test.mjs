@@ -62,13 +62,13 @@ test("group headings are rows that select or clear their whole group", () => {
   assert.equal(picker.focusedGroup, "block");
   assert.equal(picker.focused, undefined);
   assert.match(frame(), /❯ ○ Blocks {2}always-on rules/);
-  assert.match(frame(), /7 blocks · 0 selected[\s\S]*Space selects all 7[\s\S]*All of them add 438 words \(~739 tokens\) to every session/);
+  assert.match(frame(), /9 blocks · 0 selected[\s\S]*Space selects all 9[\s\S]*All of them add 591 words \(~963 tokens\) to every session/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focusedGroup, "block", "the first heading is the top of the list");
   picker.handle(" ", { name: "space" });
   assert.deepEqual(kinds("block"), blockIds);
   assert.match(frame(), /❯ ● Blocks/);
-  assert.match(frame(), /7 selected · \+438 words always on/);
+  assert.match(frame(), /9 selected · \+591 words always on/);
   picker.handle("", { name: "down" });
   picker.handle(" ", { name: "space" });
   assert.equal(kinds("block").length, blockIds.length - 1);
@@ -135,9 +135,9 @@ test("picker fits small terminals, scrolls to focus, and shows aggregate block c
     const frame = pickerFrame(picker, { columns, rows }).map(stripVTControlCharacters);
     assert.ok(frame.length < rows, `${frame.length} lines for ${rows} rows`);
     assert.ok(frame.every((line) => Array.from(line).length <= columns - 2));
-    assert.match(frame.join("\n"), /Focused changes/);
-    assert.match(frame.join("\n"), /7 selected · \+438 words always on/);
-    if (columns >= 62) assert.match(frame.join("\n"), /\(~739 tokens\)/);
+    assert.match(frame.join("\n"), /Durable task list/);
+    assert.match(frame.join("\n"), /9 selected · \+591 words always on/);
+    if (columns >= 62) assert.match(frame.join("\n"), /\(~963 tokens\)/);
   }
   assert.match(pickerFrame(picker, { columns: 32, rows: 10 }).join("\n"), /Resize/);
 });
@@ -361,7 +361,7 @@ test("category tabs wrap before they would be truncated", () => {
     const tabRows = frame.slice(1, frame.findIndex((line) => line.startsWith("─")));
     assert.ok(tabRows.length, `${columns}: no tab row`);
     assert.ok(tabRows.every((line) => !line.includes("…") && displayWidth(line) <= columns - 2), `${columns}: ${tabRows}`);
-    assert.match(tabRows.join(" "), /All 16.*Blocks 7.*Skills 3.*Skill commands 1.*Integrations 5/);
+    assert.match(tabRows.join(" "), /All 18.*Blocks 9.*Skills 3.*Skill commands 1.*Integrations 5/);
   }
 });
 

@@ -47,7 +47,7 @@
     },
     {
       "id": "block/completion-evidence",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "kind": "block",
       "name": "Completion evidence",
       "category": "Verification",
@@ -57,7 +57,7 @@
         "consider": "Adds reporting to every handoff.",
         "example": "A UI handoff names the tests and browser checks run, plus anything skipped."
       },
-      "outcome": "Completion claims identify the checks run, failures encountered, and verification skipped.",
+      "outcome": "Completion claims identify the checks run, failures encountered, and verification skipped, and lead with anything waiting on the user.",
       "alwaysOnJustification": "The rule applies to the completion of every repository task.",
       "scopes": ["project"],
       "content": {
@@ -157,6 +157,44 @@
       "alwaysOnJustification": "The policy governs the scope of edits throughout implementation, before any review workflow is invoked.",
       "scopes": ["project"],
       "content": { "kind": "bundled", "path": "blocks/focused-changes.md" },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/autonomy",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Autonomy",
+      "category": "Collaboration",
+      "description": "Keep working through steps that need no input; stop only when blocked or before destructive actions.",
+      "selection": {
+        "when": "You hand agents whole tasks with a clear finish line and want them to run without check-ins.",
+        "consider": "Skip for pair programming, where you want a summary before and after each action.",
+        "example": "A migration runs to passing tests, then stops to ask before dropping the old table."
+      },
+      "outcome": "Agents finish independent steps without pausing and ask only when blocked or before destructive or outward-facing actions.",
+      "alwaysOnJustification": "The rule decides whether to continue or ask at every step of every task.",
+      "scopes": ["project"],
+      "content": { "kind": "bundled", "path": "blocks/autonomy.md" },
+      "license": "Apache-2.0",
+      "context": { "loading": "always" }
+    },
+    {
+      "id": "block/task-list",
+      "version": "1.0.0",
+      "kind": "block",
+      "name": "Durable task list",
+      "category": "Collaboration",
+      "description": "Track long multi-step work in a root TASKS.md so progress survives context resets.",
+      "selection": {
+        "when": "Agents run long multi-step tasks that can outlast their context window.",
+        "consider": "Adds a TASKS.md file to the repository root during work; skip if your agent's built-in task tracking is enough.",
+        "example": "A twelve-endpoint migration lists each endpoint in TASKS.md and checks them off, so a new session resumes at the next one."
+      },
+      "outcome": "Long tasks keep a current checklist in TASKS.md that a fresh session can resume from.",
+      "alwaysOnJustification": "The agent must know the convention before a long task starts, not after its context is lost.",
+      "scopes": ["project"],
+      "content": { "kind": "bundled", "path": "blocks/task-list.md" },
       "license": "Apache-2.0",
       "context": { "loading": "always" }
     },
