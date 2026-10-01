@@ -53,14 +53,21 @@ are worded for any agent.
 | `block/autonomy` | The guide's recommended standing instruction for autonomous work: continue through steps that need no input, put status notes with the next action, and stop only when blocked or before destructive actions. The guide reverses this for pair programming, so the block is an explicit policy choice and its selection text says when to skip it. | **Add**, version `1.0.0`. |
 | `block/task-list` | The guide recommends keeping a long run's task list in a file and updating it as work proceeds, so progress survives context summarization. The file is `TASKS.md` at the repository root; an existing file keeps its other entries, and the agent removes its own section when done. Agents with built-in task tracking may not need it. | **Add**, version `1.0.0`. |
 
+A second pass against the guide revises both blocks to version `1.1.0`.
+`block/task-list` now adds steps discovered along the way, so work found
+mid-task survives a context reset instead of living only in the agent's
+context. `block/autonomy` replaces "changing shared systems" with "changing
+anything outside this repository", a boundary the agent can check.
+
 Rejected from the same guide: splitting work across subagents (agent-specific,
 not portable), blocking-only code review (a workflow, not a standing rule),
 design-habit exclusion lists (project taste; `plugin/frontend-design` covers
 design), and prompt hygiene such as removing "think carefully" lines (no block
 contains such filler).
 
-Aggregate always-loaded block text grows from 365 to 578 words (about 933
-tokens) when all blocks are installed, after the secure-defaults shortening.
+Aggregate always-loaded block text grows from 365 to 587 words (about 946
+tokens) when all blocks are installed, after the secure-defaults shortening and
+the second autonomy and task-list pass.
 
 ## Skill additions
 

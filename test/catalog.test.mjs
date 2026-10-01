@@ -231,6 +231,8 @@ test("blocks agree on verification wording and where deferred work is recorded",
   assert.match(text("block/completion-evidence"), /Lead the handoff\s+with anything waiting on the user/);
   assert.match(text("block/autonomy"), /Stop and ask only when you cannot continue without the user/);
   assert.match(text("block/task-list"), /`TASKS\.md` at the repository root/);
+  assert.match(text("block/task-list"), /add steps you discover along the way/);
+  assert.match(text("block/autonomy"), /changing anything outside this repository/);
   for (const id of ["block/transparent-shortcuts", "block/secure-defaults"]) {
     assert.match(text(id), /normal task system, or in\s+your handoff when there is none/, id);
   }

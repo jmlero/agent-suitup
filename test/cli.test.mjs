@@ -149,7 +149,7 @@ test("interactive init confirms the aggregate cost before installing every block
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Always on\s+578 words · ~933 tokens per session/);
+  assert.match(initialized.stdout, /Always on\s+587 words · ~946 tokens per session/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.equal(manifest.components.length, 9);

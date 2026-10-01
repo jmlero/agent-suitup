@@ -62,13 +62,13 @@ test("group headings are rows that select or clear their whole group", () => {
   assert.equal(picker.focusedGroup, "block");
   assert.equal(picker.focused, undefined);
   assert.match(frame(), /❯ ○ Blocks {2}always-on rules/);
-  assert.match(frame(), /9 blocks · 0 selected[\s\S]*Space selects all 9[\s\S]*All of them add 578 words \(~933 tokens\) to every session/);
+  assert.match(frame(), /9 blocks · 0 selected[\s\S]*Space selects all 9[\s\S]*All of them add 587 words \(~946 tokens\) to every session/);
   picker.handle("", { name: "up" });
   assert.equal(picker.focusedGroup, "block", "the first heading is the top of the list");
   picker.handle(" ", { name: "space" });
   assert.deepEqual(kinds("block"), blockIds);
   assert.match(frame(), /❯ ● Blocks/);
-  assert.match(frame(), /9 selected · \+578 words always on/);
+  assert.match(frame(), /9 selected · \+587 words always on/);
   picker.handle("", { name: "down" });
   picker.handle(" ", { name: "space" });
   assert.equal(kinds("block").length, blockIds.length - 1);
@@ -136,8 +136,8 @@ test("picker fits small terminals, scrolls to focus, and shows aggregate block c
     assert.ok(frame.length < rows, `${frame.length} lines for ${rows} rows`);
     assert.ok(frame.every((line) => Array.from(line).length <= columns - 2));
     assert.match(frame.join("\n"), /Durable task list/);
-    assert.match(frame.join("\n"), /9 selected · \+578 words always on/);
-    if (columns >= 62) assert.match(frame.join("\n"), /\(~933 tokens\)/);
+    assert.match(frame.join("\n"), /9 selected · \+587 words always on/);
+    if (columns >= 62) assert.match(frame.join("\n"), /\(~946 tokens\)/);
   }
   assert.match(pickerFrame(picker, { columns: 32, rows: 10 }).join("\n"), /Resize/);
 });
