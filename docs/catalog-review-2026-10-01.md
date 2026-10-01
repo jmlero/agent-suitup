@@ -1,7 +1,10 @@
 # Catalog maintenance review — 2026-10-01
 
-This review records the catalog trim to its core components, four block
-revisions, two block additions, two remote skill additions, and a command revision. Decisions from the [2026-08-15](catalog-review-2026-08-15.md),
+This review records the catalog trim to its core components (including
+`plugin/github`), a plugin reverification, block revisions, two block
+additions, two remote skill additions, and a command revision. The result is 19
+components: 9 blocks, 5 skills, 1 skill command, and 4 plugins. Decisions from
+the [2026-08-15](catalog-review-2026-08-15.md),
 [2026-09-07](catalog-review-2026-09-07.md), and
 [2026-09-26](catalog-review-2026-09-26.md) reviews otherwise stand.
 

@@ -5,6 +5,9 @@ every surviving component. `init` never installs a recommendation
 automatically. Unless noted, **retain** means retain in its current form while
 requiring stronger paired evidence before automatic recommendation.
 
+Later reviews supersede parts of this record; the
+[2026-10-01 review](catalog-review-2026-10-01.md) describes the current catalog.
+
 ## Portable blocks
 
 | Component | Why this form and loading behavior | Review outcome |

@@ -5,11 +5,14 @@ to the decisions in the [2026-08-15 catalog review](catalog-review-2026-08-15.md
 Other components retain their previous decisions. No integration, command, or
 subagent component is added.
 
+Later reviews supersede parts of this record; the
+[2026-10-01 review](catalog-review-2026-10-01.md) describes the current catalog.
+
 | Component | Distinct purpose and loading form | Decision |
 |---|---|---|
 | `block/focused-changes` | A standing policy for edit scope and preservation of unrelated work. Ponytail focuses on implementation complexity; this policy explicitly distinguishes necessary cleanup from incidental edits. agent-suitup's own repository instructions do not reach adopting projects. | **Retain** as an opt-in project block; no automatic suggestion. See the [review record](evaluations/records/2026-09-07-focused-changes.md). |
-| `skill/debug-issue` | Investigate a concrete failure through reproduction and checks that distinguish hypotheses. TDD defines implementation order, audits survey risks, and verification reports check results; none supplies this diagnosis workflow. Load only for a reported issue. | **Retain** as an opt-in skill; no automatic suggestion. See the [evaluation record](evaluations/records/2026-09-07-debug-issue.md). |
-| `skill/database-migration` | Prepare schema and data transitions with deployment compatibility, existing data, locks, partial progress, and recovery. Code audit can flag migration risks and CI parity aligns builds; this skill guides the transition itself. Load for migration work. | **Retain** as an opt-in skill; no automatic suggestion. See the [evaluation record](evaluations/records/2026-09-07-database-migration.md). |
+| `skill/debug-issue` | Investigate a concrete failure through reproduction and checks that distinguish hypotheses. TDD defines implementation order, audits survey risks, and verification reports check results; none supplies this diagnosis workflow. Load only for a reported issue. | **Retain** as an opt-in skill; no automatic suggestion. Withdrawn in the [2026-10-01 review](catalog-review-2026-10-01.md). |
+| `skill/database-migration` | Prepare schema and data transitions with deployment compatibility, existing data, locks, partial progress, and recovery. Code audit can flag migration risks and CI parity aligns builds; this skill guides the transition itself. Load for migration work. | **Retain** as an opt-in skill; no automatic suggestion. Withdrawn in the [2026-10-01 review](catalog-review-2026-10-01.md). |
 
 Both skills start at version `1.0.0`, support project and user scope, and use
 the existing portable skill lifecycle and optional Claude bridge. Canonical
@@ -31,9 +34,10 @@ must stay brief for obvious issues and respect diagnosis-only requests.
 Migrations must adapt to disposable databases and maintenance windows, and
 preparation must not imply authorization to mutate production.
 
-The evaluation records distinguish scoped forward checks from paired efficacy
-trials; the focused-changes record is an editorial policy review with
-hypothetical cases, not a behavioral trial. Installer tests verify discovery,
+The skills' evaluation records, deleted with the skills in the 2026-10-01
+review, were scoped forward checks rather than paired efficacy trials; the
+focused-changes record is an editorial policy review with hypothetical cases,
+not a behavioral trial. Installer tests verify discovery,
 supported installation scopes, adapter delivery, idempotency, repair, and
 removal; they do not measure whether an agent performs better with these
 components. No automatic recommendation is justified by these checks alone.

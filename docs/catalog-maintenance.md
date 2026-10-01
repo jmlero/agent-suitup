@@ -42,11 +42,14 @@ For every addition or periodic review:
    adoption examples from observed behavior.
 
 Component decisions are recorded in the
-[2026-08-15 catalog review](catalog-review-2026-08-15.md), with focused changes,
-debugging, and migration additions in the [2026-09-07 review](catalog-review-2026-09-07.md),
-block wording, remote pins, and license metadata in the
-[2026-09-26 review](catalog-review-2026-09-26.md), and the catalog trim and
-block revisions in the [2026-10-01 review](catalog-review-2026-10-01.md). `schemas/catalog.schema.json`
+[2026-08-15 catalog review](catalog-review-2026-08-15.md), with focused changes
+and the since-withdrawn debugging and migration skills in the
+[2026-09-07 review](catalog-review-2026-09-07.md), block wording, remote pins,
+and license metadata in the [2026-09-26 review](catalog-review-2026-09-26.md),
+and the catalog trim, block revisions and additions, the codebase-design and tdd
+skills, the commit-work revision, and the plugin/github removal in the
+[2026-10-01 review](catalog-review-2026-10-01.md), which describes the current
+catalog. `schemas/catalog.schema.json`
 mirrors the runtime catalog validation; `test/schema.test.mjs` fails when they
 drift apart.
 Rejected candidates remain documentation, not dormant catalog entries.

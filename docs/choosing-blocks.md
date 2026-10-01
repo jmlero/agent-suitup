@@ -153,8 +153,9 @@ for provenance and the limits of the evaluation.
   after each action, or your agent's permission settings already define when it
   stops.
 - **Tradeoff:** Fewer interruptions mean less chance to redirect mid-task. The
-  block still stops before destructive or outward-facing actions; it does not
-  replace your agent's permission prompts.
+  block still stops before destructive or outward-facing actions and before
+  changing anything outside the repository; it does not replace your agent's
+  permission prompts.
 
 Example decision: adopt for a team that assigns migrations ending in "the tests
 pass"; skip for a developer who reviews each step as it happens.
@@ -164,7 +165,8 @@ pass"; skip for a developer who reviews each step as it happens.
 [Read the instruction](../catalog/blocks/task-list.md).
 
 - **Consider when:** Agents run long multi-step tasks that can outlast their
-  context window, and you want a resumable checklist in the repository.
+  context window, and you want a resumable checklist in the repository that
+  also captures steps discovered mid-task.
 - **Skip when:** Tasks are short, or your agent's built-in task tracking is
   enough.
 - **Tradeoff:** `TASKS.md` appears at the repository root during work and can

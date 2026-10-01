@@ -14,7 +14,7 @@ remain vendor-specific.
 |---|---|---|
 | Instructions | Both discover repository `AGENTS.md` from root to working directory. Neither expands `@` imports, so blocks in `.agents/rules.md` load when the model follows the managed line in `AGENTS.md`. | Native entry point; linked rules depend on the model |
 | Skills | Both discover `.agents/skills/<name>/SKILL.md`. Grok also scans `.grok/skills` and `.claude/skills`; the first folder found for a name wins, in that order, and symlinked folders are loaded once. | Native |
-| Skill commands | The canonical skill works in both. `--adapter grok` adds a metadata-only wrapper that enforces slash-only invocation without copying the workflow. Invoke `$name` in Codex or `/name` in Grok. | Supported |
+| Skill commands | The canonical skill works in both. `--agent grok` adds a metadata-only wrapper that enforces slash-only invocation without copying the workflow. Invoke `$name` in Codex or `/name` in Grok. | Supported |
 | Plugins | Current `plugin/*` entries install through the Claude adapter. Grok and Codex use different native packaging and trust flows. | Not ported |
 | Config and MCP | `.codex/config.toml` is not imported by Grok; Grok uses `.grok/config.toml`. | No automatic translation |
 | Agents and subagents | No portable component is currently shipped, and native definitions differ. | Not supported |
@@ -36,7 +36,7 @@ Use the Grok adapter when installing explicit commands so Grok cannot invoke
 them automatically:
 
 ```bash
-agent-suitup add command/commit-work --adapter grok
+agent-suitup add command/commit-work --agent grok
 ```
 
 ## Verification performed

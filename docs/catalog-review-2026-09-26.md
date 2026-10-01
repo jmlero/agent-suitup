@@ -4,6 +4,9 @@ This review revises existing components and adds none. Decisions from the
 [2026-08-15](catalog-review-2026-08-15.md) and
 [2026-09-07](catalog-review-2026-09-07.md) reviews otherwise stand.
 
+Later reviews supersede parts of this record; the
+[2026-10-01 review](catalog-review-2026-10-01.md) describes the current catalog.
+
 | Component | Change | Decision |
 |---|---|---|
 | `block/tdd` | The cycle repeats until the requirements are met, and refactoring is limited to the code the change touched. The earlier wording could read as a single pass and as permission to refactor beyond the change, contradicting `block/focused-changes`. | **Retain**, version `1.1.0`. |

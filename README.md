@@ -104,8 +104,8 @@ tradeoffs, and links to the exact instructions.
 | `block/secure-defaults` | Protect new external boundaries by default |
 | `block/no-unfinished-ui` | Omit unavailable product paths |
 | `block/focused-changes` | Keep edits scoped, preserve unrelated work, and allow necessary supporting refactors |
-| `block/autonomy` | Keep going without check-ins; ask only when blocked or before destructive actions |
-| `block/task-list` | Track long multi-step work in a root `TASKS.md` that survives context resets |
+| `block/autonomy` | Keep going without check-ins; ask only when blocked, or before destructive actions or changes outside the repository |
+| `block/task-list` | Track long multi-step work, including steps found along the way, in a root `TASKS.md` that survives context resets |
 
 ### Install and use skills
 
@@ -144,6 +144,10 @@ with side effects such as committing. They use the same `SKILL.md`
 format; the difference is that the agent never starts them on its own. Install
 with, for example, `agent-suitup add command/commit-work`, then run
 `/commit-work` in Claude Code or Grok Build, or `$commit-work` in Codex.
+
+| Skill command | What it does |
+|---|---|
+| `command/commit-work` | Commits the files changed in the current session and pushes them straight to main, without branches or pull requests. Skip it if your project uses pull requests. |
 
 The CLI reports individual and aggregate block costs. Words are counted by
 splitting trimmed, normalized Markdown on whitespace; tokens are estimated as
