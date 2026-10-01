@@ -124,7 +124,7 @@ test("interactive init asks for agents first and installs a block through the ru
   assert.match(initialized.stdout, /Agents: Codex/);
   assert.match(initialized.stdout, /Blocks \(7\)/);
   assert.match(initialized.stdout, /Always-on rules in \.agents\/rules\.md, linked from AGENTS\.md/);
-  assert.match(initialized.stdout, /01 · block\/tdd[\s\S]*30 words/);
+  assert.match(initialized.stdout, /01 · block\/tdd[\s\S]*72 words/);
   assert.doesNotMatch(initialized.stdout, /Install them for/);
   assert.match(initialized.stdout, /1 Agents[\s\S]*2 Choose[\s\S]*3 Review/);
   assert.match(initialized.stdout, /Skills \(3\)[\s\S]*Skill commands \(1\)/);
@@ -149,7 +149,7 @@ test("interactive init confirms the aggregate cost before installing every block
     [/Install this selection/, "y"],
   ], "init", "--interactive");
   assert.equal(initialized.status, 0, initialized.stderr);
-  assert.match(initialized.stdout, /Always on\s+365 words · ~637 tokens per session/);
+  assert.match(initialized.stdout, /Always on\s+438 words · ~739 tokens per session/);
 
   const manifest = JSON.parse(read(fixture.project, ".agent-suitup/manifest.json"));
   assert.equal(manifest.components.length, 7);
@@ -562,7 +562,7 @@ test("review includes existing block cost and rechecks files changed while waiti
     }],
   ], "init", "--interactive", "--force");
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /Always on\s+97 words · ~185 tokens per session/);
+  assert.match(result.stdout, /Always on\s+139 words · ~241 tokens per session/);
   assert.match(result.stderr, /Path changed after planning: \.\/\.agents\/rules\.md/);
   assert.deepEqual(snapshotTree(fixture.root), before);
 });
@@ -589,7 +589,7 @@ test("portable content installs canonically without vendor files", (context) => 
 
   const planned = run(fixture, "plan");
   assert.equal(planned.status, 0, planned.stderr);
-  assert.match(planned.stdout, /Always on\s+30 words/);
+  assert.match(planned.stdout, /Always on\s+72 words/);
   assert.match(planned.stdout, /No file changes\./);
   const healthy = run(fixture, "doctor");
   assert.equal(healthy.status, 0, healthy.stderr);
@@ -686,7 +686,7 @@ test("block drift is refused and an explicit force restores only owned content",
   fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), "# User guidance\n");
   assert.equal(run(fixture, "add", "block/tdd").status, 0);
   const rules = path.join(fixture.project, ".agents", "rules.md");
-  fs.writeFileSync(rules, fs.readFileSync(rules, "utf8").replace("follow TDD", "Locally edit TDD"));
+  fs.writeFileSync(rules, fs.readFileSync(rules, "utf8").replace("first write a test", "Locally edit TDD"));
 
   const doctor = run(fixture, "doctor");
   assert.equal(doctor.status, 1);
@@ -721,12 +721,12 @@ test("blocks embedded in AGENTS.md by earlier releases move to the rules file", 
   fs.writeFileSync(lockFile, `${JSON.stringify(lock, null, 2)}\n`);
   const earlier = snapshotTree(fixture.root);
 
-  const edited = read(fixture.project, "AGENTS.md").replace("follow TDD", "Locally edit TDD");
+  const edited = read(fixture.project, "AGENTS.md").replace("first write a test", "Locally edit TDD");
   fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), edited);
   const refused = run(fixture, "update");
   assert.equal(refused.status, 1);
   assert.match(refused.stderr, /Managed block has local changes: block\/tdd/);
-  fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), read(fixture.project, "AGENTS.md").replace("Locally edit", "follow"));
+  fs.writeFileSync(path.join(fixture.project, "AGENTS.md"), read(fixture.project, "AGENTS.md").replace("Locally edit TDD", "first write a test"));
   assert.deepEqual(snapshotTree(fixture.root), earlier);
 
   assert.equal(run(fixture, "doctor").status, 1);
@@ -838,7 +838,7 @@ test("sectioned catalog exposes commands as complete portable skills", (context)
   ]) assert.match(listed.stdout, new RegExp(section));
   assert.doesNotMatch(listed.stdout, /External tools|Hooks & automation/);
   const blocks = run(fixture, "list", "blocks");
-  assert.match(blocks.stdout, /block\/tdd[\s\S]*30 words/);
+  assert.match(blocks.stdout, /block\/tdd[\s\S]*72 words/);
   assert.match(blocks.stdout, /block\/ponytail[\s\S]*67 words/);
 
   const commands = run(fixture, "list", "commands");

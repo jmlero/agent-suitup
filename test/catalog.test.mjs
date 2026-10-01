@@ -216,8 +216,11 @@ test("App Meerkat guidance stays attributed in compact blocks", () => {
 
 test("blocks agree on verification wording and where deferred work is recorded", () => {
   const text = (id) => bundledContent(listComponents().find((component) => component.id === id));
-  assert.match(text("block/tdd"), /follow TDD/);
-  for (const id of ["block/tdd", "block/ponytail", "block/completion-evidence"]) {
+  assert.match(text("block/tdd"), /fails for the expected reason/);
+  assert.match(text("block/tdd"), /refactor the code you touched/);
+  assert.match(text("block/focused-changes"), /Do not revert, stash, or overwrite changes you did not make/);
+  assert.match(text("block/secure-defaults"), /Keep secrets out of code,\s+logs, and error messages/);
+  for (const id of ["block/ponytail", "block/completion-evidence"]) {
     assert.match(text(id), /relevant\s+checks/, id);
   }
   assert.match(text("block/completion-evidence"), /skipped/);

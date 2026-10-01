@@ -21,8 +21,10 @@ is not loaded into your project's context.
   fixes broadly; it does not encode those narrower exceptions.
 - **Tradeoff:** Choosing test order as project policy can require test setup
   before you know whether an exploratory implementation is worth keeping. The
-  cycle repeats until the requirements are met, and refactoring is limited to
-  the code the change touched, consistent with `block/focused-changes`.
+  test must fail for the expected reason before the fix, refactoring is limited
+  to the code the change touched, consistent with `block/focused-changes`, and
+  only external boundaries are mocked. When testing first is impractical, the
+  agent says so instead of silently skipping it.
 
 Example decision: adopt for a maintained parser with executable behavior tests;
 skip for a disposable interface prototype whose interactions are still being
@@ -85,7 +87,8 @@ do not create a debt item for a speculative multi-region architecture.
 
 - **Consider when:** The project adds external boundaries such as APIs, file
   imports, or sensitive mutations, and you want a standing agreement about
-  validation, access control, and least privilege.
+  validation, injection-safe construction of queries and commands, secret
+  handling, access control, and least privilege.
 - **Skip when:** Equivalent policy is already enforced by your instructions
   and workflow, or the project does not introduce these boundaries.
 - **Tradeoff:** This is broad guidance. It supplies neither a threat model nor
@@ -118,7 +121,8 @@ communicating a temporarily unavailable export service.
 [Read the instruction](../catalog/blocks/focused-changes.md).
 
 - **Consider when:** You want changes to avoid incidental cleanup, formatting,
-  or edits to unrelated user work. The policy belongs in each adopting project's
+  or edits to unrelated user work, including reverting, stashing, or
+  overwriting changes the agent did not make. The policy belongs in each adopting project's
   instructions; this repository's own `AGENTS.md` is not installed elsewhere.
 - **Skip when:** Equivalent project guidance already applies and is followed.
 - **Tradeoff:** Unrelated cleanup remains for a separate task. Necessary
@@ -136,12 +140,12 @@ for provenance and the limits of the evaluation.
 
 ## Combining and previewing selections
 
-Verification already appears in TDD, minimal implementation, CI parity, and
-completion evidence, and all four refer to the same relevant checks. TDD runs
-them after each change, minimal implementation starts with the smallest ones,
-completion evidence expands them when risk warrants and reports what ran or was
-skipped, and CI parity adds the closest CI-equivalent check. Installing all four
-does not establish four independent benefits. Choose them for those differences.
+Verification appears in minimal implementation and completion evidence, and
+both refer to the same relevant checks: minimal implementation starts with the
+smallest ones, and completion evidence expands them when risk warrants and
+reports what ran or was skipped. TDD governs test order rather than adding a
+separate check routine. Installing all three does not establish three
+independent verification benefits. Choose them for those differences.
 
 Check the chosen agreements against existing project policies. For example,
 the broad TDD block may conflict with a policy limiting tests to selected kinds
